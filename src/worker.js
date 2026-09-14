@@ -139,9 +139,16 @@ async function api(request,env){
       }
 
       const qs=(await env.DB.prepare(`SELECT * FROM questions WHERE exam_id=? ORDER BY sort_order,id`).bind(a.exam_id).all()).results||[];
+      const incoming=new Map(b.answers.map(x=>[Number(x.questionId),['A','B','C','D'].includes(x.answer)?x.answer:null]));
+
+      // Manual submission is allowed only when every question has an answer.
+      // Automatic timer expiry may still submit the attempt with unanswered questions.
+      if(!b.expired){
+        const missing=qs.filter(q=>!incoming.get(q.id));
+        if(missing.length)return json({ok:false,error:`Please answer all ${missing.length} remaining question${missing.length===1?'':'s'} before submitting.`},400);
+      }
 
       let score=0,total=0;
-      const incoming=new Map(b.answers.map(x=>[Number(x.questionId),['A','B','C','D'].includes(x.answer)?x.answer:null]));
 
       for(const q of qs){
         const points=Number(q.points)||0;
@@ -181,6 +188,15 @@ async function api(request,env){
     }
     if(m==='GET'&&p.match(/^\/api\/admin\/students\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid student');const u=await env.DB.prepare('SELECT id,student_id,full_name,email,status,created_at FROM users WHERE id=?').bind(id).first();if(!u)return bad('Student not found',404);const results=await env.DB.prepare('SELECT r.*,e.title FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.user_id=? ORDER BY r.created_at DESC').bind(id).all();return json({student:u,results:results.results||[]})}
     if(m==='PATCH'&&p.match(/^\/api\/admin\/students\/\d+$/)){const id=idNum(p.split('/')[4]),b=await body(request);if(!id||!['active','blocked'].includes(b?.status))return bad('Invalid status');await env.DB.prepare('UPDATE users SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(b.status,id).run();return json({ok:true})}
+    if(m==='POST'&&p.match(/^\/api\/admin\/students\/\d+\/reset-password$/)){
+      const id=idNum(p.split('/')[4]),b=await body(request),newPassword=typeof b?.newPassword==='string'?b.newPassword:'';
+      if(!id||!passwordOK(newPassword))return bad('Password must be 8–128 characters');
+      const u=await env.DB.prepare('SELECT id FROM users WHERE id=?').bind(id).first();if(!u)return bad('Student not found',404);
+      const ph=await hashPassword(newPassword);
+      await env.DB.prepare('UPDATE users SET password_hash=?,password_salt=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(ph.hash,ph.salt,id).run();
+      await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id).run();
+      return json({ok:true,message:'Student password updated. Existing student sessions were signed out.'});
+    }
     if(m==='GET'&&(p==='/api/admin/exams'||p==='/api/admin/exams/')){
       const rows=await env.DB.prepare(`SELECT e.*, (SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id) question_count FROM exams e ORDER BY e.created_at DESC`).all();return json(rows.results||[]);
     }
