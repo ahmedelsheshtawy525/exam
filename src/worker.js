@@ -14,97 +14,85 @@ function json(data, status=200, extra={}) {
 }
 
 function bad(message,status=400){
-  return json({error:message},status)
+  return json({error:message},status);
 }
 
 function cookie(name,value,maxAge){
-  return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`
+  return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
 function clearCookie(name){
-  return `${name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+  return `${name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
 function randomHex(bytes=32){
   const a=new Uint8Array(bytes);
   crypto.getRandomValues(a);
-  return [...a]
-    .map(x=>x.toString(16).padStart(2,'0'))
-    .join('')
+  return [...a].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
 
 function toB64(buf){
   let s='';
-  for(const b of new Uint8Array(buf))
-    s+=String.fromCharCode(b);
-
+  for(const b of new Uint8Array(buf)) s+=String.fromCharCode(b);
   return btoa(s)
     .replaceAll('+','-')
     .replaceAll('/','_')
-    .replaceAll('=','')
+    .replaceAll('=','');
 }
 
 function fromB64(s){
   s=s.replaceAll('-','+').replaceAll('_','/');
   while(s.length%4)s+='=';
-
   const bin=atob(s);
   const a=new Uint8Array(bin.length);
-
-  for(let i=0;i<bin.length;i++)
-    a[i]=bin.charCodeAt(i);
-
-  return a
+  for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);
+  return a;
 }
 
 function clean(v,max=10000){
-  return String(v??'').trim().slice(0,max)
+  return String(v??'').trim().slice(0,max);
 }
 
 function idNum(v){
   const n=Number(v);
-  return Number.isInteger(n)&&n>0?n:null
+  return Number.isInteger(n)&&n>0?n:null;
 }
 
 function passwordOK(v){
-  return typeof v==='string'&&v.length>=8&&v.length<=128
+  return typeof v==='string'&&v.length>=8&&v.length<=128;
 }
 
 function emailOK(v){
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
 function now(){
-  return Math.floor(Date.now()/1000)
+  return Math.floor(Date.now()/1000);
 }
 
 async function hashPassword(password,saltB64){
+  const salt=saltB64
+    ? fromB64(saltB64)
+    : crypto.getRandomValues(new Uint8Array(16));
 
-  const salt=
-    saltB64
-      ?fromB64(saltB64)
-      :crypto.getRandomValues(new Uint8Array(16));
+  const key=await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
 
-  const key=
-    await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(password),
-      'PBKDF2',
-      false,
-      ['deriveBits']
-    );
-
-  const bits=
-    await crypto.subtle.deriveBits(
-      {
-        name:'PBKDF2',
-        salt,
-        iterations:100000,
-        hash:'SHA-256'
-      },
-      key,
-      256
-    );
+  const bits=await crypto.subtle.deriveBits(
+    {
+      name:'PBKDF2',
+      salt,
+      iterations:100000,
+      hash:'SHA-256'
+    },
+    key,
+    256
+  );
 
   return {
     hash:toB64(bits),
@@ -113,30 +101,18 @@ async function hashPassword(password,saltB64){
 }
 
 function equalBytes(a,b){
-
-  if(a.length!==b.length)
-    return false;
-
+  if(a.length!==b.length)return false;
   let d=0;
-
-  for(let i=0;i<a.length;i++)
-    d|=a[i]^b[i];
-
-  return d===0
+  for(let i=0;i<a.length;i++)d|=a[i]^b[i];
+  return d===0;
 }
 
 async function verifyPassword(password,stored,salt){
-
-  const x=
-    await hashPassword(
-      password,
-      salt
-    );
-
+  const x=await hashPassword(password,salt);
   return equalBytes(
     fromB64(x.hash),
     fromB64(stored)
-  )
+  );
 }
 
 function sessionCookie(id){
@@ -144,99 +120,77 @@ function sessionCookie(id){
     SESSION_COOKIE,
     id,
     SESSION_DAYS*86400
-  )
+  );
 }
 
 function sessionId(request){
-
   return request.headers
     .get('cookie')
     ?.match(
-      new RegExp(
-        `(?:^|; )${SESSION_COOKIE}=([^;]+)`
-      )
-    )?.[1]||null
+      new RegExp(`(?:^|; )${SESSION_COOKIE}=([^;]+)`)
+    )?.[1]||null;
 }
 
 async function getSession(request,env){
-
   const sid=sessionId(request);
+  if(!sid)return null;
 
-  if(!sid)
-    return null;
+  const row=await env.DB.prepare(`
+    SELECT
+      s.*,
+      u.student_id,
+      u.full_name,
+      u.email,
+      u.status user_status,
+      au.username,
+      au.role,
+      au.status admin_status
+    FROM sessions s
+    LEFT JOIN users u
+      ON u.id=s.user_id
+    LEFT JOIN admin_users au
+      ON au.id=s.admin_user_id
+    WHERE s.id=?
+      AND s.expires_at>?
+  `)
+  .bind(sid,now())
+  .first();
 
-  const row=
-    await env.DB.prepare(`
-      SELECT
-        s.*,
-        u.student_id,
-        u.full_name,
-        u.email,
-        u.status user_status,
-        au.username,
-        au.role,
-        au.status admin_status
-      FROM sessions s
-      LEFT JOIN users u
-        ON u.id=s.user_id
-      LEFT JOIN admin_users au
-        ON au.id=s.admin_user_id
-      WHERE s.id=?
-        AND s.expires_at>?
-    `)
-    .bind(
-      sid,
-      now()
-    )
-    .first();
-
-  if(!row)
-    return null;
+  if(!row)return null;
 
   if(
     (row.user_id&&row.user_status!=='active')||
     (row.admin_user_id&&row.admin_status!=='active')
-  )
+  ){
     return null;
+  }
 
   return row;
 }
 
 function userSession(s){
-  return !!s?.user_id
+  return !!s?.user_id;
 }
 
 function adminSession(s){
-  return !!s?.admin_user_id
+  return !!s?.admin_user_id;
 }
 
 async function body(req){
   try{
-    return await req.json()
+    return await req.json();
   }catch{
-    return null
+    return null;
   }
 }
 
 function originOK(request){
-
-  const origin=
-    request.headers.get('Origin');
-
-  if(!origin)
-    return true;
-
-  return origin===
-    new URL(request.url).origin
+  const origin=request.headers.get('Origin');
+  if(!origin)return true;
+  return origin===new URL(request.url).origin;
 }
 
-async function createSession(
-  env,
-  kind,
-  id,
-  request
-){
-
+async function createSession(env,kind,id,request){
   const sid=randomHex(32);
 
   await env.DB.prepare(`
@@ -254,10 +208,7 @@ async function createSession(
     id,
     now()+SESSION_DAYS*86400,
     now(),
-    clean(
-      request.headers.get('user-agent'),
-      500
-    )
+    clean(request.headers.get('user-agent'),500)
   )
   .run();
 
@@ -265,36 +216,27 @@ async function createSession(
 }
 
 async function logout(request,env){
-
   const sid=sessionId(request);
 
   if(sid){
-    await env.DB.prepare(
-      'DELETE FROM sessions WHERE id=?'
-    )
-    .bind(sid)
-    .run();
+    await env.DB
+      .prepare('DELETE FROM sessions WHERE id=?')
+      .bind(sid)
+      .run();
   }
 
-  return new Response(
-    null,
-    {
-      status:204,
-      headers:{
-        'set-cookie':
-          clearCookie(SESSION_COOKIE)
-      }
+  return new Response(null,{
+    status:204,
+    headers:{
+      'set-cookie':clearCookie(SESSION_COOKIE)
     }
-  )
+  });
 }
 
 function adminOnly(s){
   return adminSession(s)
-    ?null
-    :bad(
-      'Admin authorization required',
-      403
-    )
+    ? null
+    : bad('Admin authorization required',403);
 }
 
 async function api(request,env){
@@ -304,68 +246,53 @@ async function api(request,env){
   const m=request.method;
   const s=await getSession(request,env);
 
-  if(!originOK(request))
-    return bad(
-      'Invalid request origin',
-      403
-    );
+  if(!originOK(request)){
+    return bad('Invalid request origin',403);
+  }
 
-  /*
-    ADMIN BOOTSTRAP
-  */
+  /* =========================
+     ADMIN BOOTSTRAP
+     ========================= */
 
-  if(
-    m==='POST'&&
-    p==='/api/setup/admin'
-  ){
+  if(m==='POST'&&p==='/api/setup/admin'){
 
-    const secret=
-      request.headers.get(
-        'x-bootstrap-secret'
-      )||'';
+    const secret=request.headers.get('x-bootstrap-secret')||'';
 
     if(
       !env.ADMIN_BOOTSTRAP_SECRET||
       secret!==env.ADMIN_BOOTSTRAP_SECRET
-    )
-      return bad(
-        'Forbidden',
-        403
-      );
+    ){
+      return bad('Forbidden',403);
+    }
 
-    const count=
-      await env.DB.prepare(
-        'SELECT COUNT(*) c FROM admin_users'
-      ).first();
+    const count=await env.DB
+      .prepare('SELECT COUNT(*) c FROM admin_users')
+      .first();
 
-    if(
-      Number(count?.c||0)>0
-    )
+    if(Number(count?.c||0)>0){
       return bad(
         'Admin bootstrap is already locked',
         409
       );
+    }
 
     const b=await body(request);
 
-    const username=
-      clean(
-        b?.username,
-        80
-      ).toLowerCase();
+    const username=clean(
+      b?.username,
+      80
+    ).toLowerCase();
 
     if(
       !/^[a-z0-9._-]{3,80}$/.test(username)||
       !passwordOK(b?.password)
-    )
+    ){
       return bad(
         'Valid username and 8+ character password required'
       );
+    }
 
-    const ph=
-      await hashPassword(
-        b.password
-      );
+    const ph=await hashPassword(b.password);
 
     await env.DB.prepare(`
       INSERT INTO admin_users(
@@ -386,81 +313,72 @@ async function api(request,env){
     )
     .run();
 
-    return json({
-      ok:true
-    });
+    return json({ok:true});
   }
 
-  /*
-    STUDENT REGISTER
-  */
+  /* =========================
+     STUDENT REGISTER
+     ========================= */
 
-  if(
-    m==='POST'&&
-    p==='/api/auth/register'
-  ){
+  if(m==='POST'&&p==='/api/auth/register'){
 
     const b=await body(request);
 
-    const name=
-      clean(
-        b?.fullName,
-        120
-      );
+    const name=clean(
+      b?.fullName,
+      120
+    );
 
-    const email=
-      clean(
-        b?.email,
-        160
-      ).toLowerCase();
+    const email=clean(
+      b?.email,
+      160
+    ).toLowerCase();
 
     if(
       !name||
       !email||
       !emailOK(email)||
       !passwordOK(b?.password)
-    )
+    ){
       return bad(
         'Full name, valid email and password of 8–128 characters are required'
       );
+    }
 
-    let studentId=
-      clean(
-        b?.studentId,
-        30
-      ).toUpperCase();
+    let studentId=clean(
+      b?.studentId,
+      30
+    ).toUpperCase();
 
     if(
       studentId&&
       !/^STU-[A-Z0-9]{6,12}$/.test(studentId)
-    )
+    ){
       return bad(
         'Student ID must look like STU-ABC123456'
       );
+    }
 
     if(!studentId){
 
       for(let i=0;i<10;i++){
 
         studentId=
-          `STU-${randomHex(5)
-            .slice(0,8)
-            .toUpperCase()}`;
+          `STU-${randomHex(5).slice(0,8).toUpperCase()}`;
 
-        const x=
-          await env.DB.prepare(
+        const x=await env.DB
+          .prepare(
             'SELECT id FROM users WHERE student_id=?'
           )
           .bind(studentId)
           .first();
 
-        if(!x)
-          break;
+        if(!x)break;
       }
     }
 
-    const existing=
-      await env.DB.prepare(`
+    const existing=await env.DB
+      .prepare(`
         SELECT id
         FROM users
         WHERE student_id=?
@@ -472,44 +390,40 @@ async function api(request,env){
       )
       .first();
 
-    if(existing)
+    if(existing){
       return bad(
         'Student ID or email already exists',
         409
       );
+    }
 
-    const ph=
-      await hashPassword(
-        b.password
-      );
+    const ph=await hashPassword(b.password);
 
-    const r=
-      await env.DB.prepare(`
-        INSERT INTO users(
-          student_id,
-          full_name,
-          email,
-          password_hash,
-          password_salt
-        )
-        VALUES(?,?,?,?,?)
-      `)
-      .bind(
-        studentId,
-        name,
+    const r=await env.DB.prepare(`
+      INSERT INTO users(
+        student_id,
+        full_name,
         email,
-        ph.hash,
-        ph.salt
+        password_hash,
+        password_salt
       )
-      .run();
+      VALUES(?,?,?,?,?)
+    `)
+    .bind(
+      studentId,
+      name,
+      email,
+      ph.hash,
+      ph.salt
+    )
+    .run();
 
-    const sid=
-      await createSession(
-        env,
-        'user',
-        r.meta.last_row_id,
-        request
-      );
+    const sid=await createSession(
+      env,
+      'user',
+      r.meta.last_row_id,
+      request
+    );
 
     return json(
       {
@@ -523,49 +437,44 @@ async function api(request,env){
       },
       201,
       {
-        'set-cookie':
-          sessionCookie(sid)
+        'set-cookie':sessionCookie(sid)
       }
     );
   }
 
-  /*
-    STUDENT LOGIN
-  */
+  /* =========================
+     STUDENT LOGIN
+     ========================= */
 
-  if(
-    m==='POST'&&
-    p==='/api/auth/login'
-  ){
+  if(m==='POST'&&p==='/api/auth/login'){
 
     const b=await body(request);
 
-    const ident=
-      clean(
-        b?.identifier,
-        160
-      ).toLowerCase();
+    const ident=clean(
+      b?.identifier,
+      160
+    ).toLowerCase();
 
     if(
       !ident||
       !passwordOK(b?.password)
-    )
+    ){
       return bad(
         'Identifier and password are required'
       );
+    }
 
-    const u=
-      await env.DB.prepare(`
-        SELECT *
-        FROM users
-        WHERE lower(student_id)=?
-           OR lower(email)=?
-      `)
-      .bind(
-        ident,
-        ident
-      )
-      .first();
+    const u=await env.DB.prepare(`
+      SELECT *
+      FROM users
+      WHERE lower(student_id)=?
+         OR lower(email)=?
+    `)
+    .bind(
+      ident,
+      ident
+    )
+    .first();
 
     if(
       !u||
@@ -575,19 +484,19 @@ async function api(request,env){
         u.password_hash,
         u.password_salt
       ))
-    )
+    ){
       return bad(
         'Invalid credentials',
         401
       );
+    }
 
-    const sid=
-      await createSession(
-        env,
-        'user',
-        u.id,
-        request
-      );
+    const sid=await createSession(
+      env,
+      'user',
+      u.id,
+      request
+    );
 
     return json(
       {
@@ -600,45 +509,40 @@ async function api(request,env){
       },
       200,
       {
-        'set-cookie':
-          sessionCookie(sid)
+        'set-cookie':sessionCookie(sid)
       }
     );
   }
 
-  /*
-    ADMIN LOGIN
-  */
+  /* =========================
+     ADMIN LOGIN
+     ========================= */
 
-  if(
-    m==='POST'&&
-    p==='/api/admin/login'
-  ){
+  if(m==='POST'&&p==='/api/admin/login'){
 
     const b=await body(request);
 
-    const username=
-      clean(
-        b?.username,
-        80
-      ).toLowerCase();
+    const username=clean(
+      b?.username,
+      80
+    ).toLowerCase();
 
     if(
       !username||
       !passwordOK(b?.password)
-    )
+    ){
       return bad(
         'Username and password are required'
       );
+    }
 
-    const a=
-      await env.DB.prepare(`
-        SELECT *
-        FROM admin_users
-        WHERE lower(username)=?
-      `)
-      .bind(username)
-      .first();
+    const a=await env.DB.prepare(`
+      SELECT *
+      FROM admin_users
+      WHERE lower(username)=?
+    `)
+    .bind(username)
+    .first();
 
     if(
       !a||
@@ -648,19 +552,19 @@ async function api(request,env){
         a.password_hash,
         a.password_salt
       ))
-    )
+    ){
       return bad(
         'Invalid admin credentials',
         401
       );
+    }
 
-    const sid=
-      await createSession(
-        env,
-        'admin',
-        a.id,
-        request
-      );
+    const sid=await createSession(
+      env,
+      'admin',
+      a.id,
+      request
+    );
 
     return json(
       {
@@ -672,57 +576,54 @@ async function api(request,env){
       },
       200,
       {
-        'set-cookie':
-          sessionCookie(sid)
+        'set-cookie':sessionCookie(sid)
       }
     );
   }
 
-  /*
-    LOGOUT
-  */
+  /* =========================
+     LOGOUT
+     ========================= */
 
   if(
     m==='POST'&&
     p==='/api/auth/logout'
-  )
-    return logout(
-      request,
-      env
-    );
+  ){
+    return logout(request,env);
+  }
 
-  /*
-    AUTH ME
-  */
+  /* =========================
+     CURRENT SESSION
+     ========================= */
 
   if(
     m==='GET'&&
     p==='/api/auth/me'
-  )
+  ){
+
     return json({
       authenticated:!!s,
 
-      user:
-        userSession(s)
-          ?{
+      user:userSession(s)
+        ? {
             studentId:s.student_id,
             fullName:s.full_name,
             email:s.email
           }
-          :null,
+        : null,
 
-      admin:
-        adminSession(s)
-          ?{
+      admin:adminSession(s)
+        ? {
             username:s.username,
             role:s.role
           }
-          :null
+        : null
     });
+  }
 
-  /*
-    EXAMS
-  */
+  /* =========================
+     EXAMS
+     ========================= */
 
   if(
     m==='GET'&&
@@ -732,67 +633,63 @@ async function api(request,env){
     if(
       !userSession(s)&&
       !adminSession(s)
-    )
+    ){
       return bad(
         'Unauthorized',
         401
       );
+    }
 
-    const rows=
-      await env.DB.prepare(`
-        SELECT
-          e.id,
-          e.title,
-          e.description,
-          e.duration_minutes,
-          e.passing_percentage,
-          e.status,
-          e.created_at,
-          (
-            SELECT COUNT(*)
-            FROM questions q
-            WHERE q.exam_id=e.id
-          ) question_count
-        FROM exams e
-        ${
-          adminSession(s)
-            ?''
-            :"WHERE e.status='active'"
-        }
-        ORDER BY e.created_at DESC
-      `)
-      .all();
+    const rows=await env.DB.prepare(`
+      SELECT
+        e.id,
+        e.title,
+        e.description,
+        e.duration_minutes,
+        e.passing_percentage,
+        e.status,
+        e.created_at,
+        (
+          SELECT COUNT(*)
+          FROM questions q
+          WHERE q.exam_id=e.id
+        ) question_count
+      FROM exams e
+      ${
+        adminSession(s)
+          ? ''
+          : 'WHERE e.status=\'active\''
+      }
+      ORDER BY e.created_at DESC
+    `).all();
 
     return json(
       rows.results||[]
     );
   }
 
-  /*
-    START EXAM
-  */
+  /* =========================
+     START EXAM
+     ========================= */
 
   if(
     m==='GET'&&
-    p.match(
-      /^\/api\/exams\/\d+\/start$/
-    )
+    p.match(/^\/api\/exams\/\d+\/start$/)
   ){
 
-    if(!userSession(s))
+    if(!userSession(s)){
       return bad(
         'Unauthorized',
         401
       );
+    }
 
-    const id=
-      idNum(
-        p.split('/')[3]
-      );
+    const id=idNum(
+      p.split('/')[3]
+    );
 
-    const e=
-      id
-        ?await env.DB.prepare(`
+    const e=id
+      ? await env.DB.prepare(`
           SELECT
             id,
             title,
@@ -805,21 +702,87 @@ async function api(request,env){
         `)
         .bind(id)
         .first()
-        :null;
+      : null;
 
-    if(!e)
+    if(!e){
       return bad(
         'Exam not found',
         404
       );
+    }
 
-    let attempt=
+    /*
+      IMPORTANT FIX:
+
+      The old code did:
+      SELECT -> INSERT
+
+      Two simultaneous requests could both see
+      no attempt and both try INSERT.
+
+      Because the database has:
+      UNIQUE(exam_id,user_id,status)
+
+      one request then failed with:
+      UNIQUE constraint failed.
+
+      This version uses ON CONFLICT DO NOTHING,
+      then retrieves the existing attempt.
+    */
+
+    let attempt=await env.DB.prepare(`
+      SELECT *
+      FROM exam_attempts
+      WHERE exam_id=?
+        AND user_id=?
+        AND status='in_progress'
+    `)
+    .bind(
+      id,
+      s.user_id
+    )
+    .first();
+
+    if(!attempt){
+
       await env.DB.prepare(`
+        INSERT INTO exam_attempts(
+          exam_id,
+          user_id,
+          status
+        )
+        VALUES(
+          ?,
+          ?,
+          'in_progress'
+        )
+        ON CONFLICT(
+          exam_id,
+          user_id,
+          status
+        )
+        DO NOTHING
+      `)
+      .bind(
+        id,
+        s.user_id
+      )
+      .run();
+
+      /*
+        Whether this request inserted the row
+        or another simultaneous request inserted it,
+        retrieve the single active attempt.
+      */
+
+      attempt=await env.DB.prepare(`
         SELECT *
         FROM exam_attempts
         WHERE exam_id=?
           AND user_id=?
           AND status='in_progress'
+        ORDER BY id DESC
+        LIMIT 1
       `)
       .bind(
         id,
@@ -827,31 +790,12 @@ async function api(request,env){
       )
       .first();
 
-    if(!attempt){
-
-      const r=
-        await env.DB.prepare(`
-          INSERT INTO exam_attempts(
-            exam_id,
-            user_id,
-            status
-          )
-          VALUES(?,?, 'in_progress')
-        `)
-        .bind(
-          id,
-          s.user_id
-        )
-        .run();
-
-      attempt=
-        await env.DB.prepare(
-          'SELECT * FROM exam_attempts WHERE id=?'
-        )
-        .bind(
-          r.meta.last_row_id
-        )
-        .first();
+      if(!attempt){
+        return bad(
+          'Could not create exam attempt',
+          500
+        );
+      }
     }
 
     const age=
@@ -881,23 +825,22 @@ async function api(request,env){
       );
     }
 
-    const qs=
-      await env.DB.prepare(`
-        SELECT
-          id,
-          question_text,
-          option_a,
-          option_b,
-          option_c,
-          option_d,
-          points,
-          sort_order
-        FROM questions
-        WHERE exam_id=?
-        ORDER BY sort_order,id
-      `)
-      .bind(id)
-      .all();
+    const qs=await env.DB.prepare(`
+      SELECT
+        id,
+        question_text,
+        option_a,
+        option_b,
+        option_c,
+        option_d,
+        points,
+        sort_order
+      FROM questions
+      WHERE exam_id=?
+      ORDER BY sort_order,id
+    `)
+    .bind(id)
+    .all();
 
     return json({
       exam:e,
@@ -907,31 +850,27 @@ async function api(request,env){
     });
   }
 
-  /*
-    SUBMIT EXAM
-    FIXED VERSION
-  */
+  /* =========================
+     SUBMIT EXAM
+     ========================= */
 
   if(
     m==='POST'&&
-    p.match(
-      /^\/api\/attempts\/\d+\/submit$/
-    )
+    p.match(/^\/api\/attempts\/\d+\/submit$/)
   ){
 
-    if(!userSession(s))
+    if(!userSession(s)){
       return bad(
         'Unauthorized',
         401
       );
+    }
 
-    const id=
-      idNum(
-        p.split('/')[3]
-      );
+    const id=idNum(
+      p.split('/')[3]
+    );
 
-    const b=
-      await body(request);
+    const b=await body(request);
 
     if(
       !id||
@@ -944,75 +883,70 @@ async function api(request,env){
 
     try{
 
-      const a=
-        await env.DB.prepare(`
-          SELECT
-            a.*,
-            e.passing_percentage,
-            e.duration_minutes,
-            e.title
-          FROM exam_attempts a
-          JOIN exams e
-            ON e.id=a.exam_id
-          WHERE a.id=?
-            AND a.user_id=?
-        `)
-        .bind(
-          id,
-          s.user_id
-        )
-        .first();
+      const a=await env.DB.prepare(`
+        SELECT
+          a.*,
+          e.passing_percentage,
+          e.duration_minutes,
+          e.title
+        FROM exam_attempts a
+        JOIN exams e
+          ON e.id=a.exam_id
+        WHERE a.id=?
+          AND a.user_id=?
+      `)
+      .bind(
+        id,
+        s.user_id
+      )
+      .first();
 
-      if(!a)
+      if(!a){
         return bad(
           'Attempt not found',
           404
         );
+      }
 
       /*
-        If the attempt was already submitted,
-        return the existing result.
+        If the browser submits twice,
+        don't create another result.
+        Return the already stored result.
       */
 
-      if(
-        a.status!=='in_progress'
-      ){
+      if(a.status!=='in_progress'){
 
-        const existing=
-          await env.DB.prepare(`
-            SELECT
-              r.score,
-              r.total_points,
-              r.percentage,
-              r.passed,
-              e.title AS examTitle
-            FROM results r
-            JOIN exams e
-              ON e.id=r.exam_id
-            WHERE r.attempt_id=?
-          `)
-          .bind(id)
-          .first();
+        const existing=await env.DB.prepare(`
+          SELECT
+            r.score,
+            r.total_points,
+            r.percentage,
+            r.passed,
+            e.title AS examTitle
+          FROM results r
+          JOIN exams e
+            ON e.id=r.exam_id
+          WHERE r.attempt_id=?
+        `)
+        .bind(id)
+        .first();
 
         if(existing){
 
           return json({
             ok:true,
             result:{
-              score:
-                Number(existing.score),
-
-              totalPoints:
-                Number(existing.total_points),
-
-              percentage:
-                Number(existing.percentage),
-
-              passed:
-                Number(existing.passed),
-
-              examTitle:
-                existing.examTitle
+              score:Number(existing.score),
+              totalPoints:Number(
+                existing.total_points
+              ),
+              percentage:Number(
+                existing.percentage
+              ),
+              passed:Number(
+                existing.passed
+              ),
+              examTitle:existing.examTitle
             }
           });
         }
@@ -1029,11 +963,12 @@ async function api(request,env){
           Date.parse(a.started_at)
         )/60000;
 
-      if(!Number.isFinite(age))
+      if(!Number.isFinite(age)){
         return bad(
           'Invalid attempt start time',
           500
         );
+      }
 
       if(
         age>
@@ -1056,7 +991,7 @@ async function api(request,env){
         );
       }
 
-      const qsResult=
+      const qs=(
         await env.DB.prepare(`
           SELECT *
           FROM questions
@@ -1064,30 +999,24 @@ async function api(request,env){
           ORDER BY sort_order,id
         `)
         .bind(a.exam_id)
-        .all();
-
-      const qs=
-        qsResult.results||[];
+        .all()
+      ).results||[];
 
       let score=0;
       let total=0;
 
-      const incoming=
-        new Map(
-          b.answers.map(
-            x=>[
-              Number(x.questionId),
-              ['A','B','C','D']
-                .includes(x.answer)
-                ?x.answer
-                :null
-            ]
+      const incoming=new Map(
+        b.answers.map(x=>[
+          Number(x.questionId),
+          ['A','B','C','D'].includes(
+            x.answer
           )
-        );
+            ? x.answer
+            : null
+        ])
+      );
 
-      for(
-        const q of qs
-      ){
+      for(const q of qs){
 
         const points=
           Number(q.points)||0;
@@ -1103,8 +1032,8 @@ async function api(request,env){
 
         const earned=
           correct
-            ?points
-            :0;
+            ? points
+            : 0;
 
         score+=earned;
 
@@ -1116,20 +1045,22 @@ async function api(request,env){
             is_correct,
             points_earned
           )
-          VALUES(?,?,?,?,?)
-
+          VALUES(
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+          )
           ON CONFLICT(
             attempt_id,
             question_id
           )
-
           DO UPDATE SET
             selected_answer=
               excluded.selected_answer,
-
             is_correct=
               excluded.is_correct,
-
             points_earned=
               excluded.points_earned
         `)
@@ -1145,14 +1076,14 @@ async function api(request,env){
 
       const percentage=
         total>0
-          ?(score/total)*100
-          :0;
+          ? (score/total)*100
+          : 0;
 
       const passed=
         percentage>=
         Number(a.passing_percentage)
-          ?1
-          :0;
+          ? 1
+          : 0;
 
       await env.DB.prepare(`
         UPDATE exam_attempts
@@ -1165,10 +1096,8 @@ async function api(request,env){
       .run();
 
       /*
-        Insert result.
-        If the result already exists,
-        update it instead of creating
-        a duplicate.
+        Prevent duplicate results if the submit
+        request is accidentally repeated.
       */
 
       await env.DB.prepare(`
@@ -1181,10 +1110,16 @@ async function api(request,env){
           percentage,
           passed
         )
-        VALUES(?,?,?,?,?,?,?)
-
+        VALUES(
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?
+        )
         ON CONFLICT(attempt_id)
-
         DO UPDATE SET
           score=excluded.score,
           total_points=excluded.total_points,
@@ -1204,7 +1139,6 @@ async function api(request,env){
 
       return json({
         ok:true,
-
         result:{
           score,
           totalPoints:total,
@@ -1223,63 +1157,58 @@ async function api(request,env){
 
       return json(
         {
-          error:
-            'Exam submission failed',
-
-          details:
-            String(
-              e?.message||e
-            )
+          error:'Exam submission failed',
+          details:String(
+            e?.message||e
+          )
         },
         500
       );
     }
   }
 
-  /*
-    STUDENT RESULTS
-  */
+  /* =========================
+     STUDENT RESULTS
+     ========================= */
 
   if(
     m==='GET'&&
     p==='/api/results'
   ){
 
-    if(!userSession(s))
+    if(!userSession(s)){
       return bad(
         'Unauthorized',
         401
       );
+    }
 
-    const rows=
-      await env.DB.prepare(`
-        SELECT
-          r.*,
-          e.title,
-          e.passing_percentage
-        FROM results r
-        JOIN exams e
-          ON e.id=r.exam_id
-        WHERE r.user_id=?
-        ORDER BY r.created_at DESC
-      `)
-      .bind(s.user_id)
-      .all();
+    const rows=await env.DB.prepare(`
+      SELECT
+        r.*,
+        e.title,
+        e.passing_percentage
+      FROM results r
+      JOIN exams e
+        ON e.id=r.exam_id
+      WHERE r.user_id=?
+      ORDER BY r.created_at DESC
+    `)
+    .bind(s.user_id)
+    .all();
 
     return json(
       rows.results||[]
     );
   }
 
-  /*
-    ADMIN
-  */
+  /* =========================
+     ADMIN ROUTES
+     ========================= */
 
   if(adminSession(s)){
 
-    /*
-      ADMIN STATS
-    */
+    /* ---------- STATS ---------- */
 
     if(
       m==='GET'&&
@@ -1292,167 +1221,147 @@ async function api(request,env){
         a,
         r,
         p
-      ]=
-        await Promise.all([
-          'SELECT COUNT(*) c FROM users',
-          'SELECT COUNT(*) c FROM exams',
-          'SELECT COUNT(*) c FROM exam_attempts',
-          'SELECT AVG(percentage) avg FROM results',
-          'SELECT COALESCE(SUM(passed),0) passed,COUNT(*) total FROM results'
-        ].map(
-          x=>env.DB.prepare(x).first()
-        ));
+      ]=await Promise.all([
+        'SELECT COUNT(*) c FROM users',
+        'SELECT COUNT(*) c FROM exams',
+        'SELECT COUNT(*) c FROM exam_attempts',
+        'SELECT AVG(percentage) avg FROM results',
+        'SELECT COALESCE(SUM(passed),0) passed,COUNT(*) total FROM results'
+      ].map(
+        x=>env.DB.prepare(x).first()
+      ));
 
       return json({
         students:Number(u.c),
         exams:Number(e.c),
         attempts:Number(a.c),
-        averagePercentage:
-          Number(r.avg||0),
-
-        passRate:
-          Number(
-            p.total
-              ?100*p.passed/p.total
-              :0
-          )
+        averagePercentage:Number(
+          r.avg||0
+        ),
+        passRate:Number(
+          p.total
+            ? 100*p.passed/p.total
+            : 0
+        )
       });
     }
 
-    /*
-      ADMIN STUDENTS
-    */
+    /* ---------- STUDENTS ---------- */
 
     if(
       m==='GET'&&
       p==='/api/admin/students'
     ){
 
-      const q=
-        clean(
-          url.searchParams.get('q'),
-          100
-        );
+      const q=clean(
+        url.searchParams.get('q'),
+        100
+      );
 
       const like=`%${q}%`;
 
-      const rows=
-        await env.DB.prepare(`
-          SELECT
-            id,
-            student_id,
-            full_name,
-            email,
-            status,
-            created_at
-          FROM users
-          WHERE student_id LIKE ?
-             OR full_name LIKE ?
-             OR email LIKE ?
-          ORDER BY created_at DESC
-        `)
-        .bind(
-          like,
-          like,
-          like
-        )
-        .all();
+      const rows=await env.DB.prepare(`
+        SELECT
+          id,
+          student_id,
+          full_name,
+          email,
+          status,
+          created_at
+        FROM users
+        WHERE student_id LIKE ?
+           OR full_name LIKE ?
+           OR email LIKE ?
+        ORDER BY created_at DESC
+      `)
+      .bind(
+        like,
+        like,
+        like
+      )
+      .all();
 
       return json(
         rows.results||[]
       );
     }
 
-    /*
-      ADMIN STUDENT DETAILS
-    */
-
     if(
       m==='GET'&&
-      p.match(
-        /^\/api\/admin\/students\/\d+$/
-      )
+      p.match(/^\/api\/admin\/students\/\d+$/)
     ){
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      if(!id)
+      if(!id){
         return bad(
           'Invalid student'
         );
+      }
 
-      const u=
-        await env.DB.prepare(`
-          SELECT
-            id,
-            student_id,
-            full_name,
-            email,
-            status,
-            created_at
-          FROM users
-          WHERE id=?
-        `)
-        .bind(id)
-        .first();
+      const u=await env.DB.prepare(`
+        SELECT
+          id,
+          student_id,
+          full_name,
+          email,
+          status,
+          created_at
+        FROM users
+        WHERE id=?
+      `)
+      .bind(id)
+      .first();
 
-      if(!u)
+      if(!u){
         return bad(
           'Student not found',
           404
         );
+      }
 
-      const results=
-        await env.DB.prepare(`
-          SELECT
-            r.*,
-            e.title
-          FROM results r
-          JOIN exams e
-            ON e.id=r.exam_id
-          WHERE r.user_id=?
-          ORDER BY r.created_at DESC
-        `)
-        .bind(id)
-        .all();
+      const results=await env.DB.prepare(`
+        SELECT
+          r.*,
+          e.title
+        FROM results r
+        JOIN exams e
+          ON e.id=r.exam_id
+        WHERE r.user_id=?
+        ORDER BY r.created_at DESC
+      `)
+      .bind(id)
+      .all();
 
       return json({
         student:u,
-        results:
-          results.results||[]
+        results:results.results||[]
       });
     }
 
-    /*
-      BLOCK / ACTIVATE STUDENT
-    */
-
     if(
       m==='PATCH'&&
-      p.match(
-        /^\/api\/admin\/students\/\d+$/
-      )
+      p.match(/^\/api\/admin\/students\/\d+$/)
     ){
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      const b=
-        await body(request);
+      const b=await body(request);
 
       if(
         !id||
-        !['active','blocked']
-          .includes(b?.status)
-      )
+        !['active','blocked'].includes(
+          b?.status
+        )
+      ){
         return bad(
           'Invalid status'
         );
+      }
 
       await env.DB.prepare(`
         UPDATE users
@@ -1472,61 +1381,47 @@ async function api(request,env){
       });
     }
 
-    /*
-      ADMIN EXAMS
-    */
+    /* ---------- ADMIN EXAMS ---------- */
 
     if(
       m==='GET'&&
       p==='/api/admin/exams'
     ){
 
-      const rows=
-        await env.DB.prepare(`
-          SELECT
-            e.*,
-            (
-              SELECT COUNT(*)
-              FROM questions q
-              WHERE q.exam_id=e.id
-            ) question_count
-          FROM exams e
-          ORDER BY e.created_at DESC
-        `)
-        .all();
+      const rows=await env.DB.prepare(`
+        SELECT
+          e.*,
+          (
+            SELECT COUNT(*)
+            FROM questions q
+            WHERE q.exam_id=e.id
+          ) question_count
+        FROM exams e
+        ORDER BY e.created_at DESC
+      `).all();
 
       return json(
         rows.results||[]
       );
     }
 
-    /*
-      CREATE EXAM
-    */
-
     if(
       m==='POST'&&
       p==='/api/admin/exams'
     ){
 
-      const b=
-        await body(request);
+      const b=await body(request);
 
-      const title=
-        clean(
-          b?.title,
-          200
-        );
+      const title=clean(
+        b?.title,
+        200
+      );
 
       const duration=
-        Number(
-          b?.durationMinutes
-        );
+        Number(b?.durationMinutes);
 
       const pass=
-        Number(
-          b?.passingPercentage
-        );
+        Number(b?.passingPercentage);
 
       if(
         !title||
@@ -1536,34 +1431,41 @@ async function api(request,env){
         !Number.isFinite(pass)||
         pass<0||
         pass>100
-      )
+      ){
         return bad(
           'Invalid exam fields'
         );
+      }
 
-      const r=
-        await env.DB.prepare(`
-          INSERT INTO exams(
-            title,
-            description,
-            duration_minutes,
-            passing_percentage,
-            status,
-            created_by
-          )
-          VALUES(?,?,?,?,?,?)
-        `)
-        .bind(
+      const r=await env.DB.prepare(`
+        INSERT INTO exams(
           title,
-          clean(b?.description),
-          duration,
-          pass,
-          b?.status==='active'
-            ?'active'
-            :'inactive',
-          s.admin_user_id
+          description,
+          duration_minutes,
+          passing_percentage,
+          status,
+          created_by
         )
-        .run();
+        VALUES(
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?
+        )
+      `)
+      .bind(
+        title,
+        clean(b?.description),
+        duration,
+        pass,
+        b?.status==='active'
+          ? 'active'
+          : 'inactive',
+        s.admin_user_id
+      )
+      .run();
 
       return json(
         {
@@ -1573,34 +1475,22 @@ async function api(request,env){
       );
     }
 
-    /*
-      UPDATE EXAM
-    */
-
     if(
       m==='PUT'&&
-      p.match(
-        /^\/api\/admin\/exams\/\d+$/
-      )
+      p.match(/^\/api\/admin\/exams\/\d+$/)
     ){
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      const b=
-        await body(request);
+      const b=await body(request);
 
       const duration=
-        Number(
-          b?.durationMinutes
-        );
+        Number(b?.durationMinutes);
 
       const pass=
-        Number(
-          b?.passingPercentage
-        );
+        Number(b?.passingPercentage);
 
       if(
         !id||
@@ -1610,10 +1500,11 @@ async function api(request,env){
         duration>600||
         pass<0||
         pass>100
-      )
+      ){
         return bad(
           'Invalid exam fields'
         );
+      }
 
       await env.DB.prepare(`
         UPDATE exams
@@ -1632,8 +1523,8 @@ async function api(request,env){
         duration,
         pass,
         b.status==='active'
-          ?'active'
-          :'inactive',
+          ? 'active'
+          : 'inactive',
         id
       )
       .run();
@@ -1643,26 +1534,20 @@ async function api(request,env){
       });
     }
 
-    /*
-      DELETE EXAM
-    */
-
     if(
       m==='DELETE'&&
-      p.match(
-        /^\/api\/admin\/exams\/\d+$/
-      )
+      p.match(/^\/api\/admin\/exams\/\d+$/)
     ){
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      if(!id)
+      if(!id){
         return bad(
           'Invalid exam'
         );
+      }
 
       await env.DB.prepare(
         'DELETE FROM exams WHERE id=?'
@@ -1675,61 +1560,50 @@ async function api(request,env){
       });
     }
 
-    /*
-      GET QUESTIONS
-    */
+    /* ---------- QUESTIONS ---------- */
 
     if(
       m==='GET'&&
-      p.match(
-        /^\/api\/admin\/exams\/\d+\/questions$/
-      )
+      p.match(/^\/api\/admin\/exams\/\d+\/questions$/)
     ){
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      if(!id)
+      if(!id){
         return bad(
           'Invalid exam'
         );
+      }
 
-      const rows=
-        await env.DB.prepare(`
-          SELECT *
-          FROM questions
-          WHERE exam_id=?
-          ORDER BY sort_order,id
-        `)
-        .bind(id)
-        .all();
+      const rows=await env.DB.prepare(`
+        SELECT *
+        FROM questions
+        WHERE exam_id=?
+        ORDER BY sort_order,id
+      `)
+      .bind(id)
+      .all();
 
       return json(
         rows.results||[]
       );
     }
 
-    /*
-      CREATE QUESTION
-    */
-
     if(
       m==='POST'&&
       p==='/api/admin/questions'
     ){
 
-      const b=
-        await body(request);
+      const b=await body(request);
 
-      const examId=
-        idNum(b?.examId);
+      const examId=idNum(
+        b?.examId
+      );
 
       const points=
-        Number(
-          b?.points||1
-        );
+        Number(b?.points||1);
 
       if(
         !examId||
@@ -1738,42 +1612,53 @@ async function api(request,env){
         !clean(b?.optionB)||
         !clean(b?.optionC)||
         !clean(b?.optionD)||
-        !['A','B','C','D']
-          .includes(b?.correctAnswer)||
+        !['A','B','C','D'].includes(
+          b?.correctAnswer
+        )||
         !Number.isFinite(points)||
         points<=0
-      )
+      ){
         return bad(
           'Invalid question fields'
         );
+      }
 
-      const r=
-        await env.DB.prepare(`
-          INSERT INTO questions(
-            exam_id,
-            question_text,
-            option_a,
-            option_b,
-            option_c,
-            option_d,
-            correct_answer,
-            points,
-            sort_order
-          )
-          VALUES(?,?,?,?,?,?,?,?,?)
-        `)
-        .bind(
-          examId,
-          clean(b.questionText),
-          clean(b.optionA),
-          clean(b.optionB),
-          clean(b.optionC),
-          clean(b.optionD),
-          b.correctAnswer,
+      const r=await env.DB.prepare(`
+        INSERT INTO questions(
+          exam_id,
+          question_text,
+          option_a,
+          option_b,
+          option_c,
+          option_d,
+          correct_answer,
           points,
-          Number(b.sortOrder||0)
+          sort_order
         )
-        .run();
+        VALUES(
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?,
+          ?
+        )
+      `)
+      .bind(
+        examId,
+        clean(b.questionText),
+        clean(b.optionA),
+        clean(b.optionB),
+        clean(b.optionC),
+        clean(b.optionD),
+        b.correctAnswer,
+        points,
+        Number(b.sortOrder||0)
+      )
+      .run();
 
       return json(
         {
@@ -1783,40 +1668,32 @@ async function api(request,env){
       );
     }
 
-    /*
-      UPDATE QUESTION
-    */
-
     if(
       m==='PUT'&&
-      p.match(
-        /^\/api\/admin\/questions\/\d+$/
-      )
+      p.match(/^\/api\/admin\/questions\/\d+$/)
     ){
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      const b=
-        await body(request);
+      const b=await body(request);
 
       const points=
-        Number(
-          b?.points||1
-        );
+        Number(b?.points||1);
 
       if(
         !id||
         !clean(b?.questionText)||
-        !['A','B','C','D']
-          .includes(b?.correctAnswer)||
+        !['A','B','C','D'].includes(
+          b?.correctAnswer
+        )||
         points<=0
-      )
+      ){
         return bad(
           'Invalid question fields'
         );
+      }
 
       await env.DB.prepare(`
         UPDATE questions
@@ -1850,26 +1727,20 @@ async function api(request,env){
       });
     }
 
-    /*
-      DELETE QUESTION
-    */
-
     if(
       m==='DELETE'&&
-      p.match(
-        /^\/api\/admin\/questions\/\d+$/
-      )
+      p.match(/^\/api\/admin\/questions\/\d+$/)
     ){
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      if(!id)
+      if(!id){
         return bad(
           'Invalid question'
         );
+      }
 
       await env.DB.prepare(
         'DELETE FROM questions WHERE id=?'
@@ -1882,241 +1753,220 @@ async function api(request,env){
       });
     }
 
-    /*
-      ADMIN RESULTS
-    */
+    /* ---------- ADMIN RESULTS ---------- */
 
     if(
       m==='GET'&&
       p==='/api/admin/results'
     ){
 
-      const q=
-        clean(
-          url.searchParams.get('q'),
-          100
-        );
+      const q=clean(
+        url.searchParams.get('q'),
+        100
+      );
 
       const like=`%${q}%`;
 
-      const rows=
-        await env.DB.prepare(`
-          SELECT
-            r.*,
-            u.student_id,
-            u.full_name,
-            u.email,
-            e.title
-          FROM results r
-          JOIN users u
-            ON u.id=r.user_id
-          JOIN exams e
-            ON e.id=r.exam_id
-          WHERE u.student_id LIKE ?
-             OR u.full_name LIKE ?
-             OR u.email LIKE ?
-             OR e.title LIKE ?
-          ORDER BY r.created_at DESC
-        `)
-        .bind(
-          like,
-          like,
-          like,
-          like
-        )
-        .all();
+      const rows=await env.DB.prepare(`
+        SELECT
+          r.*,
+          u.student_id,
+          u.full_name,
+          u.email,
+          e.title
+        FROM results r
+        JOIN users u
+          ON u.id=r.user_id
+        JOIN exams e
+          ON e.id=r.exam_id
+        WHERE u.student_id LIKE ?
+           OR u.full_name LIKE ?
+           OR u.email LIKE ?
+           OR e.title LIKE ?
+        ORDER BY r.created_at DESC
+      `)
+      .bind(
+        like,
+        like,
+        like,
+        like
+      )
+      .all();
 
       return json(
         rows.results||[]
       );
     }
 
-    /*
-      ADMIN RESULT DETAILS
-    */
-
     if(
       m==='GET'&&
-      p.match(
-        /^\/api\/admin\/results\/\d+$/
-      )
+      p.match(/^\/api\/admin\/results\/\d+$/)
     ){
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      if(!id)
+      if(!id){
         return bad(
           'Invalid result'
         );
+      }
 
-      const r=
-        await env.DB.prepare(`
-          SELECT
-            r.*,
-            u.student_id,
-            u.full_name,
-            u.email,
-            e.title,
-            e.passing_percentage
-          FROM results r
-          JOIN users u
-            ON u.id=r.user_id
-          JOIN exams e
-            ON e.id=r.exam_id
-          WHERE r.id=?
-        `)
-        .bind(id)
-        .first();
+      const r=await env.DB.prepare(`
+        SELECT
+          r.*,
+          u.student_id,
+          u.full_name,
+          u.email,
+          e.title,
+          e.passing_percentage
+        FROM results r
+        JOIN users u
+          ON u.id=r.user_id
+        JOIN exams e
+          ON e.id=r.exam_id
+        WHERE r.id=?
+      `)
+      .bind(id)
+      .first();
 
-      if(!r)
+      if(!r){
         return bad(
           'Result not found',
           404
         );
+      }
 
-      const answers=
-        await env.DB.prepare(`
-          SELECT
-            a.*,
-            q.question_text,
-            q.option_a,
-            q.option_b,
-            q.option_c,
-            q.option_d,
-            q.correct_answer,
-            q.points
-          FROM answers a
-          JOIN questions q
-            ON q.id=a.question_id
-          WHERE a.attempt_id=?
-          ORDER BY q.sort_order,q.id
-        `)
-        .bind(r.attempt_id)
-        .all();
+      const answers=await env.DB.prepare(`
+        SELECT
+          a.*,
+          q.question_text,
+          q.option_a,
+          q.option_b,
+          q.option_c,
+          q.option_d,
+          q.correct_answer,
+          q.points
+        FROM answers a
+        JOIN questions q
+          ON q.id=a.question_id
+        WHERE a.attempt_id=?
+        ORDER BY q.sort_order,q.id
+      `)
+      .bind(r.attempt_id)
+      .all();
 
       return json({
         result:r,
-        answers:
-          answers.results||[]
+        answers:answers.results||[]
       });
     }
 
-    /*
-      ADMIN USERS
-    */
+    /* ---------- ADMIN USERS ---------- */
 
     if(
       m==='GET'&&
       p==='/api/admin/admins'
     ){
 
-      if(
-        s.role!=='super_admin'
-      )
+      if(s.role!=='super_admin'){
         return bad(
           'Super admin required',
           403
         );
+      }
 
-      const rows=
-        await env.DB.prepare(`
-          SELECT
-            id,
-            username,
-            role,
-            status,
-            created_at
-          FROM admin_users
-          ORDER BY created_at DESC
-        `)
-        .all();
+      const rows=await env.DB.prepare(`
+        SELECT
+          id,
+          username,
+          role,
+          status,
+          created_at
+        FROM admin_users
+        ORDER BY created_at DESC
+      `).all();
 
       return json(
         rows.results||[]
       );
     }
-
-    /*
-      CREATE ADMIN
-    */
 
     if(
       m==='POST'&&
       p==='/api/admin/admins'
     ){
 
-      if(
-        s.role!=='super_admin'
-      )
+      if(s.role!=='super_admin'){
         return bad(
           'Super admin required',
           403
         );
+      }
 
-      const b=
-        await body(request);
+      const b=await body(request);
 
-      const username=
-        clean(
-          b?.username,
-          80
-        ).toLowerCase();
+      const username=clean(
+        b?.username,
+        80
+      ).toLowerCase();
 
       if(
-        !/^[a-z0-9._-]{3,80}$/
-          .test(username)||
+        !/^[a-z0-9._-]{3,80}$/.test(username)||
         !passwordOK(b?.password)||
-        !['admin','super_admin']
-          .includes(
-            b?.role||'admin'
-          )
-      )
+        !['admin','super_admin'].includes(
+          b?.role||'admin'
+        )
+      ){
         return bad(
           'Invalid admin fields'
         );
+      }
 
-      const exists=
-        await env.DB.prepare(`
-          SELECT id
-          FROM admin_users
-          WHERE username=?
-        `)
-        .bind(username)
-        .first();
+      const exists=await env.DB.prepare(`
+        SELECT id
+        FROM admin_users
+        WHERE username=?
+      `)
+      .bind(username)
+      .first();
 
-      if(exists)
+      if(exists){
         return bad(
           'Username already exists',
           409
         );
+      }
 
-      const ph=
-        await hashPassword(
-          b.password
-        );
+      const ph=await hashPassword(
+        b.password
+      );
 
-      const r=
-        await env.DB.prepare(`
-          INSERT INTO admin_users(
-            username,
-            password_hash,
-            password_salt,
-            role,
-            status
-          )
-          VALUES(?,?,?,?,?)
-        `)
-        .bind(
+      const r=await env.DB.prepare(`
+        INSERT INTO admin_users(
           username,
-          ph.hash,
-          ph.salt,
-          b.role,
-          'active'
+          password_hash,
+          password_salt,
+          role,
+          status
         )
-        .run();
+        VALUES(
+          ?,
+          ?,
+          ?,
+          ?,
+          ?
+        )
+      `)
+      .bind(
+        username,
+        ph.hash,
+        ph.salt,
+        b.role,
+        'active'
+      )
+      .run();
 
       return json(
         {
@@ -2126,41 +1976,34 @@ async function api(request,env){
       );
     }
 
-    /*
-      BLOCK / ACTIVATE ADMIN
-    */
-
     if(
       m==='PATCH'&&
-      p.match(
-        /^\/api\/admin\/admins\/\d+$/
-      )
+      p.match(/^\/api\/admin\/admins\/\d+$/)
     ){
 
-      if(
-        s.role!=='super_admin'
-      )
+      if(s.role!=='super_admin'){
         return bad(
           'Super admin required',
           403
         );
+      }
 
-      const id=
-        idNum(
-          p.split('/')[4]
-        );
+      const id=idNum(
+        p.split('/')[4]
+      );
 
-      const b=
-        await body(request);
+      const b=await body(request);
 
       if(
         !id||
-        !['active','blocked']
-          .includes(b?.status)
-      )
+        !['active','blocked'].includes(
+          b?.status
+        )
+      ){
         return bad(
           'Invalid status'
         );
+      }
 
       await env.DB.prepare(`
         UPDATE admin_users
@@ -2185,23 +2028,26 @@ async function api(request,env){
   );
 }
 
-export default {
+/* =========================
+   WORKER ENTRY
+   ========================= */
 
+export default {
   async fetch(request,env){
 
     try{
 
       const path=
-        new URL(request.url)
-          .pathname;
+        new URL(request.url).pathname;
 
       if(
         path.startsWith('/api/')
-      )
+      ){
         return api(
           request,
           env
         );
+      }
 
       return env.ASSETS.fetch(
         request
@@ -2213,8 +2059,7 @@ export default {
 
       return json(
         {
-          error:
-            'Internal server error'
+          error:'Internal server error'
         },
         500
       );
