@@ -1,0 +1,16 @@
+name = "ahmed-finance-exam-platform"
+main = "src/worker.js"
+compatibility_date = "2026-09-14"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ahmed-finance-exam-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+SESSION_DAYS = "7"
