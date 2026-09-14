@@ -13,7 +13,7 @@ const translations={
   'New student':'طالب جديد','Create your account.':'أنشئ حسابك.','Your Student ID is generated automatically. You will see it immediately after registration.':'يتم إنشاء رقم الطالب تلقائياً وسيظهر لك مباشرة بعد التسجيل.','Full name':'الاسم بالكامل','Email':'البريد الإلكتروني','Register & Get Student ID':'التسجيل والحصول على رقم الطالب','Already registered?':'لديك حساب بالفعل؟',
   'Student dashboard':'لوحة الطالب','Performance':'الأداء','My results':'نتائجي','No active exams are available right now.':'لا توجد امتحانات متاحة حالياً.','Your completed exams will appear here.':'ستظهر امتحاناتك المكتملة هنا.','Start Exam ↗':'بدء الامتحان ↗','Passed':'ناجح','Not passed':'لم ينجح',
   'Active assessment':'الامتحان الحالي','Assessment resources':'موارد الامتحان','Files for this exam':'ملفات هذا الامتحان','Download the files you need before answering the questions.':'حمّل الملفات التي تحتاجها قبل الإجابة عن الأسئلة.','Download':'تحميل','Submit Exam':'تسليم الامتحان','Leave':'مغادرة',
-  'Assessment result':'نتيجة الامتحان','Back to Dashboard':'العودة إلى لوحة التحكم','Retake Exam':'إعادة الامتحان','Completed':'مكتمل','Pass mark':'درجة النجاح','Points earned':'النقاط المحصلة','Questions answered':'الأسئلة المُجاب عنها','Excellent performance.':'أداء ممتاز.','You passed this assessment.':'لقد اجتزت هذا الامتحان بنجاح.','Keep practicing and try again.':'استمر في التدريب وحاول مرة أخرى.','You did not reach the passing mark this time.':'لم تصل إلى درجة النجاح هذه المرة.','Overall score':'النتيجة النهائية','Assessment complete':'اكتمل الامتحان','Administration':'الإدارة','Control center.':'مركز التحكم.','Authorized administrators only.':'للمسؤولين المصرح لهم فقط.','Admin Login':'دخول المسؤول','Student?':'طالب؟','Student login':'دخول الطالب'
+  'Assessment result':'نتيجة الامتحان','Back to Dashboard':'العودة إلى لوحة التحكم','Administration':'الإدارة','Control center.':'مركز التحكم.','Authorized administrators only.':'للمسؤولين المصرح لهم فقط.','Admin Login':'دخول المسؤول','Student?':'طالب؟','Student login':'دخول الطالب'
 };
 function translateUI(){document.documentElement.lang=state.lang;document.documentElement.dir=state.lang==='ar'?'rtl':'ltr';if(state.lang!=='ar')return;const walker=document.createTreeWalker(app,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);for(const n of nodes){const v=n.nodeValue.trim();if(translations[v])n.nodeValue=n.nodeValue.replace(v,translations[v]);}}
 
@@ -118,27 +118,7 @@ async function submitExam(e,expired=false){
     if(btn){btn.disabled=false;btn.textContent='Submit Exam';}
   }
 }
-function renderResult(r){
-  const pct=Math.max(0,Math.min(100,Number(r.percentage)||0));
-  const ar=state.lang==='ar';
-  const passed=!!r.passed;
-  const statusText=passed?(ar?'ناجح':'Passed'):(ar?'لم ينجح':'Not passed');
-  const message=passed?(ar?'لقد اجتزت هذا الامتحان بنجاح.':'You passed this assessment.'):(ar?'لم تصل إلى درجة النجاح هذه المرة. استمر في التدريب وحاول مرة أخرى.':'You did not reach the passing mark this time. Keep practicing and try again.');
-  app.innerHTML=layout(`<main class="page result-page"><div class="result-shell">
-    <div class="result-header"><div><div class="eyebrow">${ar?'اكتمل الامتحان':'Assessment complete'}</div><h1>${esc(r.examTitle)}</h1><p class="muted">${ar?'النتيجة النهائية':'Overall score'} · ${fmtDate(r.submittedAt||new Date().toISOString())}</p></div><span class="result-status ${passed?'is-pass':'is-fail'}"><span class="status-dot"></span>${statusText}</span></div>
-    <section class="result-hero card">
-      <div class="score-ring" style="--score:${pct}%"><div class="score-ring-inner"><strong>${pct.toFixed(1)}%</strong><span>${ar?'النتيجة':'Score'}</span></div></div>
-      <div class="result-summary"><div class="eyebrow">${ar?'أداءك':'Your performance'}</div><h2>${message}</h2><p class="muted">${ar?'هذه النتيجة محسوبة تلقائياً بناءً على إجاباتك ودرجة النجاح المحددة للامتحان.':'This result was calculated automatically from your answers and the exam passing requirement.'}</p></div>
-    </section>
-    <section class="result-metrics">
-      <div class="result-metric card"><span>${ar?'النقاط المحصلة':'Points earned'}</span><strong>${r.score} <small>/ ${r.totalPoints}</small></strong></div>
-      <div class="result-metric card"><span>${ar?'درجة النجاح':'Pass mark'}</span><strong>${Number(r.passingPercentage??0).toFixed(0)}%</strong></div>
-      <div class="result-metric card"><span>${ar?'الأسئلة المُجاب عنها':'Questions answered'}</span><strong>${r.answeredCount??'—'} <small>/ ${r.questionCount??'—'}</small></strong></div>
-    </section>
-    <div class="result-actions">${!passed&&r.examId?`<button class="btn orange" onclick="startExam(${Number(r.examId)})">${ar?'إعادة الامتحان':'Retake Exam'} ↗</button>`:''}<button class="btn ghost" onclick="go('dashboard')">${ar?'العودة إلى لوحة التحكم':'Back to Dashboard'} ↗</button></div>
-  </div></main>`);
-  if(state.lang==='ar')translateUI();
-}
+function renderResult(r){app.innerHTML=layout(`<main class="page"><div class="center"><div class="card result-box"><div class="eyebrow">Assessment result</div><h1>${esc(r.examTitle)}</h1><div class="score">${Number(r.percentage).toFixed(1)}%</div><p>${r.score} / ${r.totalPoints} points</p><span class="pill ${r.passed?'pass':'fail'}">${r.passed?'Passed':'Not passed'}</span><div class="actions" style="justify-content:center;margin-top:25px"><button class="btn orange" onclick="go('dashboard')">Back to Dashboard</button></div></div></div></main>`)}
 async function renderAdmin(){app.innerHTML=layout(`<div class="admin-layout"><aside class="sidebar"><button class="side-btn ${state.adminTab==='overview'?'active':''}" onclick="adminTab('overview')">Overview</button><button class="side-btn ${state.adminTab==='students'?'active':''}" onclick="adminTab('students')">Students</button><button class="side-btn ${state.adminTab==='exams'?'active':''}" onclick="adminTab('exams')">Exams</button><button class="side-btn ${state.adminTab==='results'?'active':''}" onclick="adminTab('results')">Results</button>${state.me.admin.role==='super_admin'?`<button class="side-btn ${state.adminTab==='admins'?'active':''}" onclick="adminTab('admins')">Admin Users</button>`:''}</aside><main class="admin-main" id="admin-main"></main></div>`);await loadAdminTab()}
 function adminTab(t){state.adminTab=t;renderAdmin()}
 async function loadAdminTab(){const el=document.getElementById('admin-main');if(state.adminTab==='overview')return adminOverview(el);if(state.adminTab==='students')return adminStudents(el);if(state.adminTab==='exams')return adminExams(el);if(state.adminTab==='results')return adminResults(el);if(state.adminTab==='admins')return adminAdmins(el)}
