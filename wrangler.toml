@@ -1,4 +1,4 @@
-name = "ahmed-finance-exam"
+name = "ahmed-finance-exam-platform"
 main = "src/worker.js"
 compatibility_date = "2026-09-14"
 
@@ -9,7 +9,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "ahmed-finance-exam-db"
-database_id = "046cfb7a-be02-4d31-b550-03d4260c5005"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
 migrations_dir = "migrations"
 
 [vars]
