@@ -54,9 +54,28 @@ async function createSession(env,kind,id,request){
 async function logout(request,env){const sid=sessionId(request);if(sid)await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(sid).run();return new Response(null,{status:204,headers:{'set-cookie':clearCookie(SESSION_COOKIE)}})}
 function adminOnly(s){return adminSession(s)?null:bad('Admin authorization required',403)}
 
+// Self-heal optional schema columns so an older D1 database can run the current UI
+// even when the newer migrations have not yet been applied.
+async function ensureExamColumns(env){
+  const examCols=await env.DB.prepare('PRAGMA table_info(exams)').all();
+  const examNames=new Set((examCols.results||[]).map(x=>x.name));
+  if(!examNames.has('attachments_json')){
+    try{await env.DB.prepare("ALTER TABLE exams ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'").run()}catch(e){if(!String(e?.message||e).toLowerCase().includes('duplicate column'))throw e}
+  }
+  if(!examNames.has('mobile_warning')){
+    try{await env.DB.prepare("ALTER TABLE exams ADD COLUMN mobile_warning INTEGER NOT NULL DEFAULT 0").run()}catch(e){if(!String(e?.message||e).toLowerCase().includes('duplicate column'))throw e}
+  }
+  const qCols=await env.DB.prepare('PRAGMA table_info(questions)').all();
+  const qNames=new Set((qCols.results||[]).map(x=>x.name));
+  if(!qNames.has('attachments_json')){
+    try{await env.DB.prepare("ALTER TABLE questions ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'").run()}catch(e){if(!String(e?.message||e).toLowerCase().includes('duplicate column'))throw e}
+  }
+}
+
 async function api(request,env){
   const url=new URL(request.url),p=url.pathname,m=request.method,s=await getSession(request,env);
   if(!originOK(request))return bad('Invalid request origin',403);
+  await ensureExamColumns(env);
 
   if(m==='POST'&&p==='/api/setup/admin'){
     const secret=request.headers.get('x-bootstrap-secret')||'';if(!env.ADMIN_BOOTSTRAP_SECRET||secret!==env.ADMIN_BOOTSTRAP_SECRET)return bad('Forbidden',403);

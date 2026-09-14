@@ -62,3 +62,84 @@ body.dark-mode .question-number{background:#f7f7f5;color:#090909}body.dark-mode 
 /* Exam review, question flags, mobile warning and mobile layout */
 .question-head-copy{flex:1;min-width:0}.question-mark-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;padding:9px 12px;display:inline-flex;align-items:center;gap:7px;cursor:pointer;font:inherit;white-space:nowrap}.question-mark-btn.is-marked{border-color:var(--accent);color:var(--accent)}.exam-status-row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}.review-panel{margin-top:18px;padding:18px}.review-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.review-items{display:grid;gap:8px}.review-item{display:grid;grid-template-columns:38px 1fr auto;gap:10px;align-items:center;text-align:left;width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);cursor:pointer}.review-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.review-item em{font-size:12px;font-style:normal;color:var(--muted)}.review-item.is-marked{border-color:var(--accent)}.review-item.is-unanswered{border-style:dashed}.exam-mobile-setting{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface2);cursor:pointer}.exam-mobile-setting input{margin-top:3px}.exam-mobile-setting span{display:flex;flex-direction:column;gap:3px}.exam-mobile-setting small{color:var(--muted);line-height:1.5}.mobile-warning-modal{max-width:560px}.mobile-warning-body{padding:6px 0 2px}.warning-icon{width:44px;height:44px;border-radius:50%;border:1px solid var(--accent);display:grid;place-items:center;color:var(--accent);font-weight:800;font-size:22px;margin-bottom:14px}
 @media (max-width:700px){.exam-page{padding-left:12px!important;padding-right:12px!important}.exam-toolbar{align-items:flex-start;gap:12px}.exam-toolbar h1{font-size:25px;line-height:1.15}.exam-timer-box{min-width:105px;padding:10px}.timer{font-size:25px}.question-head{align-items:flex-start;gap:10px;flex-wrap:wrap}.question-mark-btn{margin-left:auto;font-size:12px;padding:8px 10px}.question-title{font-size:20px;line-height:1.45}.option{padding:13px 11px}.question-navigation{position:sticky;bottom:10px;z-index:8;background:var(--surface);padding:9px;border:1px solid var(--border);border-radius:14px}.submit-panel{flex-direction:column;align-items:stretch}.submit-panel .actions{display:grid;grid-template-columns:1fr 1fr}.review-item{grid-template-columns:34px 1fr}.review-item em{grid-column:2}}
+
+/* =========================================================
+   FINAL MOBILE LAYOUT — STUDENT + ADMIN
+   Desktop layout remains unchanged.
+   ========================================================= */
+.mobile-menu-btn{display:none}
+@media (max-width:700px){
+  html,body{width:100%;overflow-x:hidden}
+  .topbar{height:64px;min-height:64px;padding:9px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;position:sticky;top:0;z-index:40;background:rgba(245,242,235,.97)}
+  .brand{min-width:0;gap:8px;overflow:hidden}
+  .brand-logo{width:34px;height:34px;flex:none}
+  .brand-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand-name small{font-size:7px;letter-spacing:.02em;white-space:nowrap}
+  .mobile-menu-btn{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--line);border-radius:11px;background:var(--surface);color:var(--text);font-size:20px;line-height:1;grid-column:2;grid-row:1}
+  .site-nav{display:none;position:absolute;left:10px;right:10px;top:60px;width:auto;order:unset;padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:15px;box-shadow:0 18px 45px rgba(20,18,15,.14);flex-direction:column;align-items:stretch;gap:3px;z-index:60}
+  .topbar.mobile-menu-open .site-nav{display:flex}
+  .site-nav button,.site-nav a{font-size:13px;text-align:left;padding:12px 13px;border-radius:10px;color:var(--text)}
+  .site-nav button:hover,.site-nav a:hover{background:var(--surface2);transform:none}
+  .top-actions{grid-column:1;grid-row:2;display:flex;justify-content:flex-end;gap:6px;margin:0;position:absolute;right:62px;top:12px}
+  .top-actions>.btn,.connect-btn{display:none}
+  .circle-btn{width:38px;height:38px}
+  .page{width:calc(100% - 28px);padding:28px 0 48px}
+  .home-page{width:calc(100% - 28px);padding:18px 0 45px}
+  .card{padding:18px;border-radius:16px}
+  .hero-card{padding:22px}
+  .grid,.grid-2,.grid-3,.auth-grid,.two-col{grid-template-columns:1fr!important}
+  .dashboard-head{display:block;margin-bottom:20px}
+  .dashboard-head h1{font-size:31px}
+  .kpis{grid-template-columns:1fr 1fr!important;gap:9px}
+  .kpi{padding:15px}
+  .kpi .num{font-size:23px}
+  .admin-layout{display:block;min-height:calc(100vh - 64px)}
+  .sidebar{position:sticky;top:64px;z-index:25;display:flex;overflow-x:auto;overflow-y:hidden;gap:6px;padding:8px 10px;border:0;border-bottom:1px solid var(--line);background:var(--bg);scrollbar-width:none}
+  .sidebar::-webkit-scrollbar{display:none}
+  .side-btn{flex:0 0 auto;width:auto;min-width:max-content;margin:0;padding:9px 12px;font-size:12px;border:1px solid transparent}
+  .side-btn.active{border-color:var(--line);background:var(--surface)}
+  .admin-main{padding:20px 14px 42px;min-width:0;overflow:hidden}
+  .admin-main .section-head{align-items:flex-start;flex-direction:column;gap:10px;margin:22px 0 13px}
+  .admin-main .toolbar{width:100%}
+  .admin-main .toolbar input{width:100%;min-width:0}
+  .table-wrap{width:100%;max-width:100%;overflow-x:auto}
+  .modal-backdrop{padding:8px}
+  .modal{width:100%;max-width:none;max-height:94vh;border-radius:16px;padding:18px}
+  .modal-head{position:sticky;top:-18px;padding:2px 0 10px;background:var(--surface);z-index:2}
+  .attachment-row{grid-template-columns:1fr!important;padding:10px}
+  .attachment-row .btn{width:100%}
+  .question{padding:18px;margin-bottom:12px}
+  .question-title{font-size:17px;line-height:1.55}
+  .option{padding:12px 10px;gap:9px}
+  .exam-page{padding:18px 12px 40px!important}
+  .exam-toolbar{top:64px;margin:0 -2px 12px;padding:10px 0 12px;background:var(--bg)}
+  .exam-toolbar h1{font-size:23px}
+  .exam-timer-box{min-width:96px;padding:8px 10px}
+  .exam-timer-box .timer{font-size:20px}
+  .progress-track{width:100%;max-width:150px}
+  .question-head{grid-template-columns:34px minmax(0,1fr);gap:9px}
+  .question-mark-btn{margin-left:0;font-size:11px;padding:7px 9px}
+  .question-navigation{position:static;margin:12px 0}
+  .question-navigation .btn{min-width:0;flex:1}
+  .submit-panel{position:sticky;bottom:7px;margin:12px 0 0;padding:11px;gap:9px;border-radius:14px}
+  .submit-panel .actions{grid-template-columns:1fr 1fr}
+  .result-page{padding-top:30px}
+  .result-hero{padding:24px 18px}
+  .score-ring{width:180px;height:180px}
+  .score-ring-inner strong{font-size:36px}
+  .result-metric{padding:17px}
+  .footer{padding:18px 14px;font-size:10px;text-align:center}
+  .home-actions{flex-direction:column;align-items:stretch;gap:10px}
+  .home-actions .btn,.home-text-btn{width:100%;text-align:center}
+  .home-hero{padding-top:18px}
+}
+@media (max-width:390px){
+  .brand-name{font-size:12px}
+  .brand-name small{font-size:6.5px}
+  .top-actions{right:58px}
+  .circle-btn{width:36px;height:36px}
+  .mobile-menu-btn{width:38px;height:38px}
+  .kpis{grid-template-columns:1fr!important}
+  .exam-timer-box{min-width:88px}
+}
+body.dark-mode .mobile-menu-btn{background:var(--surface);color:var(--text)}
