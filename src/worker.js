@@ -3,132 +3,45 @@ const SESSION_DAYS = 7;
 const SESSION_COOKIE = 'exam_session';
 
 function json(data, status=200, extra={}) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers:{
-      'content-type':'application/json; charset=utf-8',
-      'cache-control':'no-store',
-      ...extra
-    }
-  });
+  return new Response(JSON.stringify(data), {status, headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store',...extra}});
 }
-
-function bad(message,status=400){
-  return json({error:message},status);
-}
-
-function cookie(name,value,maxAge){
-  return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
-}
-
-function clearCookie(name){
-  return `${name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
-}
-
-function randomHex(bytes=32){
-  const a=new Uint8Array(bytes);
-  crypto.getRandomValues(a);
-  return [...a].map(x=>x.toString(16).padStart(2,'0')).join('');
-}
-
-function toB64(buf){
-  let s='';
-  for(const b of new Uint8Array(buf)) s+=String.fromCharCode(b);
-  return btoa(s)
-    .replaceAll('+','-')
-    .replaceAll('/','_')
-    .replaceAll('=','');
-}
-
-function fromB64(s){
-  s=s.replaceAll('-','+').replaceAll('_','/');
-  while(s.length%4)s+='=';
-  const bin=atob(s);
-  const a=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);
-  return a;
-}
-
-function clean(v,max=10000){
-  return String(v??'').trim().slice(0,max);
-}
-
-function idNum(v){
-  const n=Number(v);
-  return Number.isInteger(n)&&n>0?n:null;
-}
-
-function passwordOK(v){
-  return typeof v==='string'&&v.length>=8&&v.length<=128;
-}
-
-function emailOK(v){
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-}
-
-function now(){
-  return Math.floor(Date.now()/1000);
-}
+function bad(message,status=400){return json({error:message},status)}
+function cookie(name,value,maxAge){return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`}
+function clearCookie(name){return `${name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`}
+function randomHex(bytes=32){const a=new Uint8Array(bytes);crypto.getRandomValues(a);return [...a].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function toB64(buf){let s='';for(const b of new Uint8Array(buf))s+=String.fromCharCode(b);return btoa(s).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')}
+function fromB64(s){s=s.replaceAll('-','+').replaceAll('_','/');while(s.length%4)s+='=';const bin=atob(s);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a}
+function clean(v,max=10000){return String(v??'').trim().slice(0,max)}
+function idNum(v){const n=Number(v);return Number.isInteger(n)&&n>0?n:null}
+function passwordOK(v){return typeof v==='string'&&v.length>=8&&v.length<=128}
+function emailOK(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
+function now(){return Math.floor(Date.now()/1000)}
 
 async function hashPassword(password,saltB64){
-  const salt=saltB64
-    ? fromB64(saltB64)
-    : crypto.getRandomValues(new Uint8Array(16));
-
-  const key=await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits']
-  );
-
-  const bits=await crypto.subtle.deriveBits(
-    {
-      name:'PBKDF2',
-      salt,
-      iterations:100000,
-      hash:'SHA-256'
-    },
-    key,
-    256
-  );
-
-  return {
-    hash:toB64(bits),
-    salt:toB64(salt)
-  };
+  const salt=saltB64?fromB64(saltB64):crypto.getRandomValues(new Uint8Array(16));
+  const key=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:100000,hash:'SHA-256'},key,256);
+  return {hash:toB64(bits),salt:toB64(salt)};
 }
 
 function equalBytes(a,b){
   if(a.length!==b.length)return false;
   let d=0;
   for(let i=0;i<a.length;i++)d|=a[i]^b[i];
-  return d===0;
+  return d===0
 }
 
 async function verifyPassword(password,stored,salt){
   const x=await hashPassword(password,salt);
-  return equalBytes(
-    fromB64(x.hash),
-    fromB64(stored)
-  );
+  return equalBytes(fromB64(x.hash),fromB64(stored))
 }
 
 function sessionCookie(id){
-  return cookie(
-    SESSION_COOKIE,
-    id,
-    SESSION_DAYS*86400
-  );
+  return cookie(SESSION_COOKIE,id,SESSION_DAYS*86400)
 }
 
 function sessionId(request){
-  return request.headers
-    .get('cookie')
-    ?.match(
-      new RegExp(`(?:^|; )${SESSION_COOKIE}=([^;]+)`)
-    )?.[1]||null;
+  return request.headers.get('cookie')?.match(new RegExp(`(?:^|; )${SESSION_COOKIE}=([^;]+)`))?.[1]||null
 }
 
 async function getSession(request,env){
@@ -169,25 +82,25 @@ async function getSession(request,env){
 }
 
 function userSession(s){
-  return !!s?.user_id;
+  return !!s?.user_id
 }
 
 function adminSession(s){
-  return !!s?.admin_user_id;
+  return !!s?.admin_user_id
 }
 
 async function body(req){
   try{
-    return await req.json();
+    return await req.json()
   }catch{
-    return null;
+    return null
   }
 }
 
 function originOK(request){
   const origin=request.headers.get('Origin');
   if(!origin)return true;
-  return origin===new URL(request.url).origin;
+  return origin===new URL(request.url).origin
 }
 
 async function createSession(env,kind,id,request){
@@ -230,13 +143,13 @@ async function logout(request,env){
     headers:{
       'set-cookie':clearCookie(SESSION_COOKIE)
     }
-  });
+  })
 }
 
 function adminOnly(s){
   return adminSession(s)
     ? null
-    : bad('Admin authorization required',403);
+    : bad('Admin authorization required',403)
 }
 
 async function api(request,env){
@@ -712,22 +625,70 @@ async function api(request,env){
     }
 
     /*
-      IMPORTANT FIX:
+      PREVIOUS RESULT CHECK
 
-      The old code did:
-      SELECT -> INSERT
+      Passed:
+      -> Cannot enter again.
 
-      Two simultaneous requests could both see
-      no attempt and both try INSERT.
+      Failed:
+      -> Can retake.
 
-      Because the database has:
-      UNIQUE(exam_id,user_id,status)
+      No result:
+      -> Can enter.
+    */
 
-      one request then failed with:
-      UNIQUE constraint failed.
+    const previousResult=await env.DB.prepare(`
+      SELECT
+        id,
+        passed,
+        percentage,
+        created_at
+      FROM results
+      WHERE exam_id=?
+        AND user_id=?
+      ORDER BY created_at DESC,
+               id DESC
+      LIMIT 1
+    `)
+    .bind(
+      id,
+      s.user_id
+    )
+    .first();
 
-      This version uses ON CONFLICT DO NOTHING,
-      then retrieves the existing attempt.
+    if(
+      previousResult &&
+      Number(previousResult.passed)===1
+    ){
+
+      return json(
+        {
+          ok:false,
+          canEnter:false,
+          reason:'already_passed',
+
+          error:
+            'لا يمكن دخول الامتحان مرة أخرى لأنك اجتزت هذا الامتحان بالفعل.',
+
+          message:
+            'لا يمكن دخول الامتحان مرة أخرى لأنك اجتزت هذا الامتحان بالفعل.',
+
+          result:{
+            percentage:Number(
+              previousResult.percentage
+            ),
+            passed:true
+          }
+        },
+        409
+      );
+    }
+
+    /*
+      EXISTING UNFINISHED ATTEMPT
+
+      If the student has an unfinished attempt,
+      continue it instead of creating another one.
     */
 
     let attempt=await env.DB.prepare(`
@@ -736,12 +697,21 @@ async function api(request,env){
       WHERE exam_id=?
         AND user_id=?
         AND status='in_progress'
+      ORDER BY id DESC
+      LIMIT 1
     `)
     .bind(
       id,
       s.user_id
     )
     .first();
+
+    /*
+      CREATE ATTEMPT SAFELY
+
+      ON CONFLICT prevents the UNIQUE constraint
+      race condition.
+    */
 
     if(!attempt){
 
@@ -769,12 +739,6 @@ async function api(request,env){
       )
       .run();
 
-      /*
-        Whether this request inserted the row
-        or another simultaneous request inserted it,
-        retrieve the single active attempt.
-      */
-
       attempt=await env.DB.prepare(`
         SELECT *
         FROM exam_attempts
@@ -797,6 +761,10 @@ async function api(request,env){
         );
       }
     }
+
+    /*
+      CHECK EXAM TIME
+    */
 
     const age=
       (
@@ -824,6 +792,12 @@ async function api(request,env){
         409
       );
     }
+
+    /*
+      QUESTIONS
+
+      Correct answers are NOT sent to student.
+    */
 
     const qs=await env.DB.prepare(`
       SELECT
@@ -909,9 +883,8 @@ async function api(request,env){
       }
 
       /*
-        If the browser submits twice,
-        don't create another result.
-        Return the already stored result.
+        If submit happens twice,
+        return existing result.
       */
 
       if(a.status!=='in_progress'){
@@ -936,7 +909,9 @@ async function api(request,env){
           return json({
             ok:true,
             result:{
-              score:Number(existing.score),
+              score:Number(
+                existing.score
+              ),
               totalPoints:Number(
                 existing.total_points
               ),
@@ -1095,11 +1070,6 @@ async function api(request,env){
       .bind(id)
       .run();
 
-      /*
-        Prevent duplicate results if the submit
-        request is accidentally repeated.
-      */
-
       await env.DB.prepare(`
         INSERT INTO results(
           attempt_id,
@@ -1203,7 +1173,7 @@ async function api(request,env){
   }
 
   /* =========================
-     ADMIN ROUTES
+     ADMIN
      ========================= */
 
   if(adminSession(s)){
@@ -1222,14 +1192,26 @@ async function api(request,env){
         r,
         p
       ]=await Promise.all([
-        'SELECT COUNT(*) c FROM users',
-        'SELECT COUNT(*) c FROM exams',
-        'SELECT COUNT(*) c FROM exam_attempts',
-        'SELECT AVG(percentage) avg FROM results',
-        'SELECT COALESCE(SUM(passed),0) passed,COUNT(*) total FROM results'
-      ].map(
-        x=>env.DB.prepare(x).first()
-      ));
+        env.DB.prepare(
+          'SELECT COUNT(*) c FROM users'
+        ).first(),
+
+        env.DB.prepare(
+          'SELECT COUNT(*) c FROM exams'
+        ).first(),
+
+        env.DB.prepare(
+          'SELECT COUNT(*) c FROM exam_attempts'
+        ).first(),
+
+        env.DB.prepare(
+          'SELECT AVG(percentage) avg FROM results'
+        ).first(),
+
+        env.DB.prepare(
+          'SELECT COALESCE(SUM(passed),0) passed,COUNT(*) total FROM results'
+        ).first()
+      ]);
 
       return json({
         students:Number(u.c),
