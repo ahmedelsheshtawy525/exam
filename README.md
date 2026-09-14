@@ -1,3 +1,7 @@
+
+## V8.1 patch
+- Added GET `/api/admin/exams/:id` compatibility endpoint to prevent 404s from cached/older admin UI flows.
+- Added static app.js cache-busting query on admin.html.
 # Ahmed Finance Exam Platform — Full MVP
 
 A production-oriented exam platform built for Cloudflare Workers + Cloudflare D1, with a visual language aligned to the Ahmed Elsheshtawy finance portfolio: warm off-white surfaces, graphite text, orange accent, thin borders, quiet cards, generous spacing, and responsive layouts.

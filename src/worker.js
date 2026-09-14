@@ -216,6 +216,13 @@ async function api(request,env){
       await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id).run();
       return json({ok:true,message:'Student password updated. Existing student sessions were signed out.'});
     }
+    if(m==='GET'&&p.match(/^\/api\/admin\/exams\/(\d+)\/?$/)){
+      const id=idNum((p.match(/^\/api\/admin\/exams\/(\d+)/)||[])[1]);
+      if(!id)return bad('Invalid exam');
+      const exam=await env.DB.prepare(`SELECT e.*, (SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id) question_count FROM exams e WHERE e.id=?`).bind(id).first();
+      if(!exam)return bad('Exam not found',404);
+      return json({...exam,attachments:parseAttachments(exam.attachments_json)});
+    }
     if(m==='GET'&&(p==='/api/admin/exams'||p==='/api/admin/exams/')){
       const rows=await env.DB.prepare(`SELECT e.*, (SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id) question_count FROM exams e ORDER BY e.created_at DESC`).all();return json(rows.results||[]);
     }
