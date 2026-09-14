@@ -187,7 +187,20 @@ async function api(request,env){
 
   if(adminSession(s)){
     if(m==='GET'&&p==='/api/admin/stats'){
-      const [u,e,a,r,p]=await Promise.all(['SELECT COUNT(*) c FROM users','SELECT COUNT(*) c FROM exams','SELECT COUNT(*) c FROM exam_attempts','SELECT AVG(percentage) avg FROM results','SELECT COALESCE(SUM(passed),0) passed,COUNT(*) total FROM results'].map(x=>env.DB.prepare(x).first()));return json({students:Number(u.c),exams:Number(e.c),attempts:Number(a.c),averagePercentage:Number(r.avg||0),passRate:Number(p.total?100*p.passed/p.total:0)});
+      const queries=[
+        'SELECT COUNT(*) c FROM users',
+        'SELECT COUNT(*) c FROM exams',
+        "SELECT COUNT(*) c FROM exams WHERE status='active' AND (expires_at IS NULL OR julianday(expires_at)>julianday('now'))",
+        'SELECT COUNT(*) c FROM exam_attempts',
+        "SELECT COUNT(*) c FROM results",
+        'SELECT COUNT(*) c FROM questions',
+        'SELECT AVG(percentage) avg FROM results',
+        'SELECT COALESCE(SUM(passed),0) passed,COUNT(*) total FROM results',
+        'SELECT COALESCE(SUM(CASE WHEN passed=0 THEN 1 ELSE 0 END),0) failed FROM results',
+        "SELECT COUNT(*) c FROM exams WHERE available_from IS NOT NULL AND julianday(available_from)>julianday('now')"
+      ];
+      const [u,e,ae,a,r,q,avg,pr,fr,se]=await Promise.all(queries.map(x=>env.DB.prepare(x).first()));
+      return json({students:Number(u.c),exams:Number(e.c),activeExams:Number(ae.c),attempts:Number(a.c),completedAttempts:Number(r.c),questions:Number(q.c),averagePercentage:Number(avg.avg||0),passedResults:Number(pr.passed||0),failedResults:Number(fr.failed||0),passRate:Number(pr.total?100*pr.passed/pr.total:0),scheduledExams:Number(se.c)});
     }
     if(m==='GET'&&p==='/api/admin/students'){
       const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT id,student_id,full_name,email,phone,status,created_at FROM users WHERE student_id LIKE ? OR full_name LIKE ? OR email LIKE ? OR phone LIKE ? ORDER BY created_at DESC').bind(like,like,like,like).all();return json(rows.results||[]);
@@ -231,6 +244,7 @@ async function api(request,env){
     if(m==='PUT'&&p.match(/^\/api\/admin\/questions\/\d+$/)){const id=idNum(p.split('/')[4]),b=await body(request),points=Number(b?.points||1),attachments=normalizeAttachments(b?.attachments);if(!id||!clean(b?.questionText)||!['A','B','C','D'].includes(b?.correctAnswer)||points<=0)return bad('Invalid question fields');await env.DB.prepare('UPDATE questions SET question_text=?,option_a=?,option_b=?,option_c=?,option_d=?,correct_answer=?,points=?,sort_order=?,attachments_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(clean(b.questionText),clean(b.optionA),clean(b.optionB),clean(b.optionC),clean(b.optionD),b.correctAnswer,points,Number(b.sortOrder||0),JSON.stringify(attachments),id).run();return json({ok:true})}
     if(m==='DELETE'&&p.match(/^\/api\/admin\/questions\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid question');await env.DB.prepare('DELETE FROM questions WHERE id=?').bind(id).run();return json({ok:true})}
     if(m==='GET'&&p==='/api/admin/results'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE u.student_id LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY r.created_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
+    if(m==='GET'&&p==='/api/admin/results/stats'){const d=await env.DB.prepare('SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN passed=1 THEN 1 ELSE 0 END),0) passed,COALESCE(SUM(CASE WHEN passed=0 THEN 1 ELSE 0 END),0) failed,COALESCE(AVG(percentage),0) average,COALESCE(MAX(percentage),0) highest,COALESCE(MIN(percentage),0) lowest FROM results').first();return json({total:Number(d.total||0),passed:Number(d.passed||0),failed:Number(d.failed||0),average:Number(d.average||0),highest:Number(d.highest||0),lowest:Number(d.lowest||0),passRate:Number(d.total?100*d.passed/d.total:0)})}
     if(m==='GET'&&p.match(/^\/api\/admin\/results\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid result');const r=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title,e.passing_percentage FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE r.id=?').bind(id).first();if(!r)return bad('Result not found',404);const answers=await env.DB.prepare('SELECT a.*,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_answer,q.points FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY q.sort_order,q.id').bind(r.attempt_id).all();return json({result:r,answers:answers.results||[]})}
     if(m==='GET'&&p==='/api/admin/admins'){if(s.role!=='super_admin')return bad('Super admin required',403);const rows=await env.DB.prepare('SELECT id,username,role,status,created_at FROM admin_users ORDER BY created_at DESC').all();return json(rows.results||[])}
     if(m==='POST'&&p==='/api/admin/admins'){if(s.role!=='super_admin')return bad('Super admin required',403);const b=await body(request),username=clean(b?.username,80).toLowerCase();if(!/^[a-z0-9._-]{3,80}$/.test(username)||!passwordOK(b?.password)||!['admin','super_admin'].includes(b?.role||'admin'))return bad('Invalid admin fields');const exists=await env.DB.prepare('SELECT id FROM admin_users WHERE username=?').bind(username).first();if(exists)return bad('Username already exists',409);const ph=await hashPassword(b.password);const r=await env.DB.prepare('INSERT INTO admin_users(username,password_hash,password_salt,role,status) VALUES(?,?,?,?,?)').bind(username,ph.hash,ph.salt,b.role,'active').run();return json({id:r.meta.last_row_id},201)}
