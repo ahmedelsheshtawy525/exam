@@ -38,16 +38,115 @@ async function sendCertificateEmail(env,{to,name,examTitle,certificateUrl,percen
   return {sent:true};
 }
 async function ensureCertificate(env,request,resultId){
-  const existing=await env.DB.prepare(`SELECT c.*,u.full_name,u.email,e.title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.result_id=?`).bind(resultId).first();
-  if(existing)return {certificateId:existing.certificate_id,certificateUrl:absoluteUrl(request,`/certificate/${existing.certificate_id}`,env),issuedAt:existing.issued_at,emailSent:Number(existing.email_sent||0)===1};
-  const r=await env.DB.prepare('SELECT r.id,r.user_id,r.exam_id,r.percentage,r.passed,u.full_name,u.email,e.title FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE r.id=?').bind(resultId).first();
-  if(!r||!r.passed)return null;
-  const cid=certificateId(),issuedAt=new Date().toISOString();
-  await env.DB.prepare('INSERT INTO certificates(certificate_id,result_id,user_id,exam_id,issued_at,email_sent) VALUES(?,?,?,?,?,0)').bind(cid,r.id,r.user_id,r.exam_id,issuedAt).run();
-  const url=absoluteUrl(request,`/certificate/${cid}`,env);
-  const mail=await sendCertificateEmail(env,{to:r.email,name:r.full_name,examTitle:r.title,certificateUrl:url,percentage:r.percentage,certificateId:cid});
-  if(mail.sent)await env.DB.prepare('UPDATE certificates SET email_sent=1,email_sent_at=CURRENT_TIMESTAMP WHERE certificate_id=?').bind(cid).run();
-  return {certificateId:cid,certificateUrl:url,issuedAt,emailSent:mail.sent};
+  const r=await env.DB.prepare(`
+    SELECT
+      r.id,
+      r.attempt_id,
+      r.user_id,
+      r.exam_id,
+      r.percentage,
+      r.passed,
+      u.full_name,
+      u.email,
+      e.title
+    FROM results r
+    JOIN users u ON u.id=r.user_id
+    JOIN exams e ON e.id=r.exam_id
+    WHERE r.id=?
+  `).bind(resultId).first();
+
+  if(!r || !r.passed)return null;
+
+  const existing=await env.DB.prepare(`
+    SELECT *
+    FROM certificates
+    WHERE attempt_id=?
+    LIMIT 1
+  `).bind(String(r.attempt_id)).first();
+
+  if(existing){
+    return {
+      certificateId: existing.id,
+      certificateNumber: existing.certificate_number,
+      certificateUrl: absoluteUrl(
+        request,
+        `/certificate/${existing.id}`,
+        env
+      ),
+      issuedAt: existing.issued_at,
+      emailSent: false
+    };
+  }
+
+  const cid=certificateId();
+  const verificationToken=randomHex(24);
+  const issuedAt=new Date().toISOString();
+
+  await env.DB.prepare(`
+    INSERT INTO certificates(
+      id,
+      certificate_number,
+      verification_token,
+      attempt_id,
+      user_id,
+      exam_id,
+      score,
+      percentage,
+      title,
+      issued_by,
+      type,
+      level,
+      format,
+      duration,
+      description,
+      skills,
+      issued_at,
+      status
+    )
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    cid,
+    cid,
+    verificationToken,
+    String(r.attempt_id),
+    String(r.user_id),
+    String(r.exam_id),
+    0,
+    Number(r.percentage),
+    r.title,
+    'Ahmed Elsheshtawy',
+    'completion',
+    null,
+    'digital',
+    null,
+    null,
+    null,
+    issuedAt,
+    'valid'
+  ).run();
+
+  const url=absoluteUrl(
+    request,
+    `/certificate/${cid}`,
+    env
+  );
+
+  const mail=await sendCertificateEmail(env,{
+    to:r.email,
+    name:r.full_name,
+    examTitle:r.title,
+    certificateUrl:url,
+    percentage:r.percentage,
+    certificateId:cid
+  });
+
+  return {
+    certificateId:cid,
+    certificateNumber:cid,
+    certificateUrl:url,
+    issuedAt,
+    emailSent:mail.sent
+  };
 }
 function certificatePage(c){
  const safe=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
