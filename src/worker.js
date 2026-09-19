@@ -160,9 +160,14 @@ async function api(request,env){
           const qCount=await env.DB.prepare('SELECT COUNT(*) AS c FROM questions WHERE exam_id=?').bind(existing.exam_id).first();
           const answered=await env.DB.prepare('SELECT COUNT(*) AS c FROM answers WHERE attempt_id=? AND selected_answer IS NOT NULL').bind(id).first();
           let certificate=null;
+          let certificateError=null;
           if(Number(existing.passed)===1 && Number(a.certificate_enabled??1)===1){
-            const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
-            certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:existing.exam_id,a,score:Number(existing.score),total:Number(existing.total_points),percentage:Number(existing.percentage)});
+            try{
+              certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:existing.exam_id,a,score:Number(existing.score),total:Number(existing.total_points),percentage:Number(existing.percentage)});
+            }catch(certError){
+              certificateError=String(certError?.message||certError);
+              console.error('CERTIFICATE ISSUE ERROR:',certificateError);
+            }
           }
           return json({ok:true,result:{
             score:Number(existing.score),
@@ -175,7 +180,8 @@ async function api(request,env){
             questionCount:Number(qCount?.c||0),
             answeredCount:Number(answered?.c||0),
             submittedAt:a.submitted_at||null,
-            certificate
+            certificate,
+            certificateError
           }});
         }
         return bad('Attempt already submitted',409);
@@ -220,11 +226,16 @@ async function api(request,env){
 
       await env.DB.prepare(`INSERT INTO results(attempt_id,user_id,exam_id,score,total_points,percentage,passed) VALUES(?,?,?,?,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET score=excluded.score,total_points=excluded.total_points,percentage=excluded.percentage,passed=excluded.passed`).bind(id,s.user_id,a.exam_id,score,total,percentage,passed).run();
       let certificate=null;
+      let certificateError=null;
       if(passed && Number(a.certificate_enabled??1)===1){
-        const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
-        certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage});
+        try{
+          certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage});
+        }catch(certError){
+          certificateError=String(certError?.message||certError);
+          console.error('CERTIFICATE ISSUE ERROR:',certificateError);
+        }
       }
-      return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),certificate}});
+      return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),certificate,certificateError}});
     }catch(e){
       console.error('EXAM SUBMIT ERROR:',e?.message||e);
       return json({error:'Exam submission failed',details:String(e?.message||e)},500);
