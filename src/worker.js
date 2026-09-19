@@ -32,6 +32,24 @@ function isoOrNull(v){if(v===null||v===undefined||String(v).trim()==='')return n
 function availabilityState(startAt,expiresAt){const t=Date.now();const s=startAt?Date.parse(startAt):NaN,e=expiresAt?Date.parse(expiresAt):NaN;if(Number.isFinite(e)&&t>=e)return 'expired';if(Number.isFinite(s)&&t<s)return 'scheduled';return 'open'}
 function parseSkills(value){try{const a=Array.isArray(value)?value:JSON.parse(value||'[]');return a.map(x=>clean(x,80)).filter(Boolean).slice(0,30)}catch{return []}}
 function certificateNumber(){const d=new Date(),y=d.getUTCFullYear();return `CERT-${y}-${randomHex(5).slice(0,10).toUpperCase()}`}
+async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,total,percentage,resultId}){
+  const existing=await env.DB.prepare('SELECT certificate_number,status FROM certificates WHERE attempt_id=?').bind(attemptId).first();
+  if(existing)return {certificateNumber:existing.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existing.certificate_number)}`,status:existing.status};
+  const u=await env.DB.prepare('SELECT full_name,email FROM users WHERE id=?').bind(userId).first();
+  if(!u)throw new Error('Student account not found while issuing certificate');
+  const certNo=certificateNumber(),token=randomHex(24),skills=parseSkills(a.certificate_skills_json);
+  await env.DB.prepare(`INSERT INTO certificates(certificate_number,verification_token,attempt_id,result_id,user_id,exam_id,student_name,student_email,exam_title,score,total_points,percentage,title,issued_by,type,level,format,duration,description,skills_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(certNo,token,attemptId,resultId,userId,examId,u.full_name,u.email,a.title,score,total,percentage,
+      clean(a.certificate_title||`${a.title} Certificate`,200),
+      clean(a.certificate_issued_by||'Ahmed Elsheshtawy',200),
+      clean(a.certificate_type||'Training',80),
+      clean(a.certificate_level||'Intermediate',80),
+      clean(a.certificate_format||'Online',80),
+      clean(a.certificate_duration||'',80),
+      clean(a.certificate_description||a.description||'',10000),
+      JSON.stringify(skills)).run();
+  return {certificateNumber:certNo,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(certNo)}`,status:'valid'};
+}
 function htmlEscape(v){return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;')}
 function credentialPage(c,request){const origin=new URL(request.url).origin;const verify=`${origin}/verify/${encodeURIComponent(c.certificate_number)}`;const skills=parseSkills(c.skills_json);const status=c.status==='valid';return `<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>${htmlEscape(c.title)} — ${htmlEscape(c.student_name)}</title><style>body{margin:0;background:#f5f7fb;color:#172033;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:900px;margin:48px auto;padding:20px}.card{background:#fff;border:1px solid #e4e8ef;border-radius:24px;box-shadow:0 16px 50px #17203314;overflow:hidden}.hero{padding:42px;background:linear-gradient(135deg,#101828,#26364f);color:#fff}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.72}.hero h1{font-size:34px;margin:12px 0}.hero p{margin:6px 0;color:#dce5f2}.student{font-size:26px;font-weight:700}.body{padding:34px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.item{padding:16px;border:1px solid #e8ebf0;border-radius:14px}.label{font-size:12px;color:#667085;text-transform:uppercase;letter-spacing:.08em}.value{font-weight:650;margin-top:6px}.desc{line-height:1.7;color:#475467}.skills{display:flex;gap:8px;flex-wrap:wrap}.skill{padding:8px 11px;border-radius:999px;background:#eef2f7}.status{display:inline-flex;padding:8px 12px;border-radius:999px;font-weight:700;background:${status?'#e8f7ee':'#fdecec'};color:${status?'#18794e':'#b42318'}}.footer{margin-top:28px;padding-top:24px;border-top:1px solid #e8ebf0;display:flex;justify-content:space-between;gap:20px;align-items:end}.verify{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;color:#475467}@media(max-width:650px){.grid{grid-template-columns:1fr}.wrap{margin:10px auto}.hero{padding:28px}.body{padding:22px}.hero h1{font-size:27px}}</style></head><body><main class=\"wrap\"><section class=\"card\"><div class=\"hero\"><div class=\"eyebrow\">Verified Credential</div><h1>${htmlEscape(c.title)}</h1><p class=\"student\">${htmlEscape(c.student_name)}</p><p>Successfully completed <b>${htmlEscape(c.exam_title)}</b></p></div><div class=\"body\"><div class=\"grid\"><div class=\"item\"><div class=\"label\">Score</div><div class=\"value\">${Number(c.percentage).toFixed(1)}%</div></div><div class=\"item\"><div class=\"label\">Issued</div><div class=\"value\">${htmlEscape(new Date(String(c.issued_at).includes('T')?c.issued_at:c.issued_at+'Z').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}))}</div></div><div class=\"item\"><div class=\"label\">Issued by</div><div class=\"value\">${htmlEscape(c.issued_by)}</div></div><div class=\"item\"><div class=\"label\">Type</div><div class=\"value\">${htmlEscape(c.type)}</div></div><div class=\"item\"><div class=\"label\">Level</div><div class=\"value\">${htmlEscape(c.level)}</div></div><div class=\"item\"><div class=\"label\">Format</div><div class=\"value\">${htmlEscape(c.format)}</div></div><div class=\"item\"><div class=\"label\">Duration</div><div class=\"value\">${htmlEscape(c.duration||'—')}</div></div><div class=\"item\"><div class=\"label\">Status</div><div class=\"value\"><span class=\"status\">${status?'✓ Valid':'⚠ Revoked'}</span></div></div></div><div style=\"margin-top:28px\"><div class=\"label\">Description</div><p class=\"desc\">${htmlEscape(c.description||'No description provided.')}</p></div><div style=\"margin-top:28px\"><div class=\"label\">Skills</div><div class=\"skills\">${skills.map(x=>`<span class=\"skill\">${htmlEscape(x)}</span>`).join('')||'<span class=\"desc\">No skills listed.</span>'}</div></div><div class=\"footer\"><div><div class=\"label\">Certificate ID</div><div class=\"value\">${htmlEscape(c.certificate_number)}</div><div class=\"verify\">${htmlEscape(verify)}</div></div><div><b>${status?'Certificate Verified':'Certificate Revoked'}</b></div></div></div></section></main></body></html>`}
 async function hashPassword(password,saltB64){
@@ -137,8 +155,11 @@ async function api(request,env){
         if(existing){
           const qCount=await env.DB.prepare('SELECT COUNT(*) AS c FROM questions WHERE exam_id=?').bind(existing.exam_id).first();
           const answered=await env.DB.prepare('SELECT COUNT(*) AS c FROM answers WHERE attempt_id=? AND selected_answer IS NOT NULL').bind(id).first();
-          const cert=await env.DB.prepare('SELECT certificate_number,status FROM certificates WHERE attempt_id=?').bind(id).first();
-          const certificate=cert?{certificateNumber:cert.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(cert.certificate_number)}`,status:cert.status}:null;
+          let certificate=null;
+          if(Number(existing.passed)===1 && Number(a.certificate_enabled??1)===1){
+            const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
+            certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:existing.exam_id,a,score:Number(existing.score),total:Number(existing.total_points),percentage:Number(existing.percentage),resultId:resultRow?.id});
+          }
           return json({ok:true,result:{
             score:Number(existing.score),
             totalPoints:Number(existing.total_points),
@@ -196,15 +217,8 @@ async function api(request,env){
       await env.DB.prepare(`INSERT INTO results(attempt_id,user_id,exam_id,score,total_points,percentage,passed) VALUES(?,?,?,?,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET score=excluded.score,total_points=excluded.total_points,percentage=excluded.percentage,passed=excluded.passed`).bind(id,s.user_id,a.exam_id,score,total,percentage,passed).run();
       let certificate=null;
       if(passed && Number(a.certificate_enabled??1)===1){
-        const existingCert=await env.DB.prepare('SELECT * FROM certificates WHERE attempt_id=?').bind(id).first();
-        if(existingCert){certificate={certificateNumber:existingCert.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existingCert.certificate_number)}`,status:existingCert.status};}
-        else {
-          const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
-          const u=await env.DB.prepare('SELECT full_name,email FROM users WHERE id=?').bind(s.user_id).first();
-          const certNo=certificateNumber(),token=randomHex(24),skills=parseSkills(a.certificate_skills_json);
-          await env.DB.prepare(`INSERT INTO certificates(certificate_number,verification_token,attempt_id,result_id,user_id,exam_id,student_name,student_email,exam_title,score,total_points,percentage,title,issued_by,type,level,format,duration,description,skills_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(certNo,token,id,resultRow.id,s.user_id,a.exam_id,u.full_name,u.email,a.title,score,total,percentage,clean(a.certificate_title||`${a.title} Certificate`,200),clean(a.certificate_issued_by||'Ahmed Elsheshtawy',200),clean(a.certificate_type||'Training',80),clean(a.certificate_level||'Intermediate',80),clean(a.certificate_format||'Online',80),clean(a.certificate_duration||'',80),clean(a.certificate_description||a.description||'',10000),JSON.stringify(skills)).run();
-          certificate={certificateNumber:certNo,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(certNo)}`,status:'valid'};
-        }
+        const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
+        certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage,resultId:resultRow.id});
       }
       return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),certificate}});
     }catch(e){

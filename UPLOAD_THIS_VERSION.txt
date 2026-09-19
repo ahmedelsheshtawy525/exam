@@ -1,17 +1,19 @@
-UPLOAD THIS VERSION
+UPLOAD THIS VERSION — v10.0
 
-This version fixes the result page display:
-- Invalid Date is handled safely.
-- Pass mark no longer falls back to 0%.
-- Questions answered no longer falls back to — / —.
-- App.js is cache-busted to v9.0 so Cloudflare/browser caches cannot keep the old result UI.
-- Native credential/certificate system is preserved.
+Certificate flow:
+- Migration 0008 enables native credentials for existing exams.
+- Already-passed / already-submitted attempts can receive a certificate when the exam is certificate-enabled.
+- The student result page shows a prominent "Your certificate is ready" section.
+- Admin > Certificates remains available for View / Revoke / Restore.
+- Public verification remains at /verify/CERT-...
+- App cache is bumped to v10.0.
 
-Cloudflare:
-1. Upload/replace the project files.
-2. Deploy the Worker.
-3. Hard-refresh the browser (Ctrl+Shift+R) once after deployment.
-4. Test the Financial Modeling & Valuation exam again.
+Deployment:
+1. Deploy this project.
+2. Apply migration 0008 to the SAME D1 database:
+   npx wrangler d1 migrations apply DB --remote
+3. Hard refresh with Ctrl+Shift+R.
+4. Open the FMVA result again. If it is passed, the certificate will be issued automatically.
+5. Then click Open Certificate.
 
-D1:
-If migration 0007 has already been applied in the current D1 database, do NOT run it again.
+Do NOT rerun migration 0007 if it is already applied.
