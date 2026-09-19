@@ -1,19 +1,18 @@
-UPLOAD THIS VERSION — v10.0
+FMVA Exam Platform v12 — Student Results Review
 
-Certificate flow:
-- Migration 0008 enables native credentials for existing exams.
-- Already-passed / already-submitted attempts can receive a certificate when the exam is certificate-enabled.
-- The student result page shows a prominent "Your certificate is ready" section.
-- Admin > Certificates remains available for View / Revoke / Restore.
-- Public verification remains at /verify/CERT-...
-- App cache is bumped to v10.0.
+This version keeps the existing exam submission/result summary and adds a full student Results view.
 
-Deployment:
-1. Deploy this project.
-2. Apply migration 0008 to the SAME D1 database:
-   npx wrangler d1 migrations apply DB --remote
-3. Hard refresh with Ctrl+Shift+R.
-4. Open the FMVA result again. If it is passed, the certificate will be issued automatically.
-5. Then click Open Certificate.
+Student flow:
+1. Submit exam normally.
+2. Immediate completion page remains the score summary.
+3. Click Results in the top navigation after leaving the exam.
+4. The latest completed result opens as the same score-summary style page.
+5. Under the summary, the student sees every question, their submitted answer, the correct answer, correctness, and points.
+6. From the dashboard, clicking any row under My results opens that result's detailed review.
 
-Do NOT rerun migration 0007 if it is already applied.
+Backend:
+- Added GET /api/results/:id for the logged-in owner only.
+- Returns result metadata plus answer/question details.
+- Does not expose other students' results.
+
+Frontend cache version: app.js?v=12.0

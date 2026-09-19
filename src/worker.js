@@ -32,14 +32,18 @@ function isoOrNull(v){if(v===null||v===undefined||String(v).trim()==='')return n
 function availabilityState(startAt,expiresAt){const t=Date.now();const s=startAt?Date.parse(startAt):NaN,e=expiresAt?Date.parse(expiresAt):NaN;if(Number.isFinite(e)&&t>=e)return 'expired';if(Number.isFinite(s)&&t<s)return 'scheduled';return 'open'}
 function parseSkills(value){try{const a=Array.isArray(value)?value:JSON.parse(value||'[]');return a.map(x=>clean(x,80)).filter(Boolean).slice(0,30)}catch{return []}}
 function certificateNumber(){const d=new Date(),y=d.getUTCFullYear();return `CERT-${y}-${randomHex(5).slice(0,10).toUpperCase()}`}
-async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,total,percentage,resultId}){
-  const existing=await env.DB.prepare('SELECT certificate_number,status FROM certificates WHERE attempt_id=?').bind(attemptId).first();
+async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,total,percentage}){
+  const existing=await env.DB.prepare('SELECT certificate_number,status FROM certificates WHERE attempt_id=?').bind(String(attemptId)).first();
   if(existing)return {certificateNumber:existing.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existing.certificate_number)}`,status:existing.status};
   const u=await env.DB.prepare('SELECT full_name,email FROM users WHERE id=?').bind(userId).first();
   if(!u)throw new Error('Student account not found while issuing certificate');
-  const certNo=certificateNumber(),token=randomHex(24),skills=parseSkills(a.certificate_skills_json);
-  await env.DB.prepare(`INSERT INTO certificates(certificate_number,verification_token,attempt_id,result_id,user_id,exam_id,student_name,student_email,exam_title,score,total_points,percentage,title,issued_by,type,level,format,duration,description,skills_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(certNo,token,attemptId,resultId,userId,examId,u.full_name,u.email,a.title,score,total,percentage,
+  const certId=randomHex(16);
+  const certNo=certificateNumber();
+  const token=randomHex(24);
+  const skills=parseSkills(a.certificate_skills_json);
+  const issuedAt=new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO certificates(id,certificate_number,verification_token,attempt_id,user_id,exam_id,score,percentage,title,issued_by,type,level,format,duration,description,skills,issued_at,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(certId,certNo,token,String(attemptId),String(userId),String(examId),score,percentage,
       clean(a.certificate_title||`${a.title} Certificate`,200),
       clean(a.certificate_issued_by||'Ahmed Elsheshtawy',200),
       clean(a.certificate_type||'Training',80),
@@ -47,11 +51,11 @@ async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,to
       clean(a.certificate_format||'Online',80),
       clean(a.certificate_duration||'',80),
       clean(a.certificate_description||a.description||'',10000),
-      JSON.stringify(skills)).run();
+      JSON.stringify(skills),issuedAt,'valid').run();
   return {certificateNumber:certNo,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(certNo)}`,status:'valid'};
 }
 function htmlEscape(v){return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;')}
-function credentialPage(c,request){const origin=new URL(request.url).origin;const verify=`${origin}/verify/${encodeURIComponent(c.certificate_number)}`;const skills=parseSkills(c.skills_json);const status=c.status==='valid';return `<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>${htmlEscape(c.title)} — ${htmlEscape(c.student_name)}</title><style>body{margin:0;background:#f5f7fb;color:#172033;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:900px;margin:48px auto;padding:20px}.card{background:#fff;border:1px solid #e4e8ef;border-radius:24px;box-shadow:0 16px 50px #17203314;overflow:hidden}.hero{padding:42px;background:linear-gradient(135deg,#101828,#26364f);color:#fff}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.72}.hero h1{font-size:34px;margin:12px 0}.hero p{margin:6px 0;color:#dce5f2}.student{font-size:26px;font-weight:700}.body{padding:34px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.item{padding:16px;border:1px solid #e8ebf0;border-radius:14px}.label{font-size:12px;color:#667085;text-transform:uppercase;letter-spacing:.08em}.value{font-weight:650;margin-top:6px}.desc{line-height:1.7;color:#475467}.skills{display:flex;gap:8px;flex-wrap:wrap}.skill{padding:8px 11px;border-radius:999px;background:#eef2f7}.status{display:inline-flex;padding:8px 12px;border-radius:999px;font-weight:700;background:${status?'#e8f7ee':'#fdecec'};color:${status?'#18794e':'#b42318'}}.footer{margin-top:28px;padding-top:24px;border-top:1px solid #e8ebf0;display:flex;justify-content:space-between;gap:20px;align-items:end}.verify{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;color:#475467}@media(max-width:650px){.grid{grid-template-columns:1fr}.wrap{margin:10px auto}.hero{padding:28px}.body{padding:22px}.hero h1{font-size:27px}}</style></head><body><main class=\"wrap\"><section class=\"card\"><div class=\"hero\"><div class=\"eyebrow\">Verified Credential</div><h1>${htmlEscape(c.title)}</h1><p class=\"student\">${htmlEscape(c.student_name)}</p><p>Successfully completed <b>${htmlEscape(c.exam_title)}</b></p></div><div class=\"body\"><div class=\"grid\"><div class=\"item\"><div class=\"label\">Score</div><div class=\"value\">${Number(c.percentage).toFixed(1)}%</div></div><div class=\"item\"><div class=\"label\">Issued</div><div class=\"value\">${htmlEscape(new Date(String(c.issued_at).includes('T')?c.issued_at:c.issued_at+'Z').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}))}</div></div><div class=\"item\"><div class=\"label\">Issued by</div><div class=\"value\">${htmlEscape(c.issued_by)}</div></div><div class=\"item\"><div class=\"label\">Type</div><div class=\"value\">${htmlEscape(c.type)}</div></div><div class=\"item\"><div class=\"label\">Level</div><div class=\"value\">${htmlEscape(c.level)}</div></div><div class=\"item\"><div class=\"label\">Format</div><div class=\"value\">${htmlEscape(c.format)}</div></div><div class=\"item\"><div class=\"label\">Duration</div><div class=\"value\">${htmlEscape(c.duration||'—')}</div></div><div class=\"item\"><div class=\"label\">Status</div><div class=\"value\"><span class=\"status\">${status?'✓ Valid':'⚠ Revoked'}</span></div></div></div><div style=\"margin-top:28px\"><div class=\"label\">Description</div><p class=\"desc\">${htmlEscape(c.description||'No description provided.')}</p></div><div style=\"margin-top:28px\"><div class=\"label\">Skills</div><div class=\"skills\">${skills.map(x=>`<span class=\"skill\">${htmlEscape(x)}</span>`).join('')||'<span class=\"desc\">No skills listed.</span>'}</div></div><div class=\"footer\"><div><div class=\"label\">Certificate ID</div><div class=\"value\">${htmlEscape(c.certificate_number)}</div><div class=\"verify\">${htmlEscape(verify)}</div></div><div><b>${status?'Certificate Verified':'Certificate Revoked'}</b></div></div></div></section></main></body></html>`}
+function credentialPage(c,request){const origin=new URL(request.url).origin;const verify=`${origin}/verify/${encodeURIComponent(c.certificate_number)}`;const skills=parseSkills(c.skills);const status=c.status==='valid';return `<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>${htmlEscape(c.title)} — ${htmlEscape(c.student_name)}</title><style>body{margin:0;background:#f5f7fb;color:#172033;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:900px;margin:48px auto;padding:20px}.card{background:#fff;border:1px solid #e4e8ef;border-radius:24px;box-shadow:0 16px 50px #17203314;overflow:hidden}.hero{padding:42px;background:linear-gradient(135deg,#101828,#26364f);color:#fff}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.72}.hero h1{font-size:34px;margin:12px 0}.hero p{margin:6px 0;color:#dce5f2}.student{font-size:26px;font-weight:700}.body{padding:34px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.item{padding:16px;border:1px solid #e8ebf0;border-radius:14px}.label{font-size:12px;color:#667085;text-transform:uppercase;letter-spacing:.08em}.value{font-weight:650;margin-top:6px}.desc{line-height:1.7;color:#475467}.skills{display:flex;gap:8px;flex-wrap:wrap}.skill{padding:8px 11px;border-radius:999px;background:#eef2f7}.status{display:inline-flex;padding:8px 12px;border-radius:999px;font-weight:700;background:${status?'#e8f7ee':'#fdecec'};color:${status?'#18794e':'#b42318'}}.footer{margin-top:28px;padding-top:24px;border-top:1px solid #e8ebf0;display:flex;justify-content:space-between;gap:20px;align-items:end}.verify{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;color:#475467}@media(max-width:650px){.grid{grid-template-columns:1fr}.wrap{margin:10px auto}.hero{padding:28px}.body{padding:22px}.hero h1{font-size:27px}}</style></head><body><main class=\"wrap\"><section class=\"card\"><div class=\"hero\"><div class=\"eyebrow\">Verified Credential</div><h1>${htmlEscape(c.title)}</h1><p class=\"student\">${htmlEscape(c.student_name)}</p><p>Successfully completed <b>${htmlEscape(c.exam_title)}</b></p></div><div class=\"body\"><div class=\"grid\"><div class=\"item\"><div class=\"label\">Score</div><div class=\"value\">${Number(c.percentage).toFixed(1)}%</div></div><div class=\"item\"><div class=\"label\">Issued</div><div class=\"value\">${htmlEscape(new Date(String(c.issued_at).includes('T')?c.issued_at:c.issued_at+'Z').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}))}</div></div><div class=\"item\"><div class=\"label\">Issued by</div><div class=\"value\">${htmlEscape(c.issued_by)}</div></div><div class=\"item\"><div class=\"label\">Type</div><div class=\"value\">${htmlEscape(c.type)}</div></div><div class=\"item\"><div class=\"label\">Level</div><div class=\"value\">${htmlEscape(c.level)}</div></div><div class=\"item\"><div class=\"label\">Format</div><div class=\"value\">${htmlEscape(c.format)}</div></div><div class=\"item\"><div class=\"label\">Duration</div><div class=\"value\">${htmlEscape(c.duration||'—')}</div></div><div class=\"item\"><div class=\"label\">Status</div><div class=\"value\"><span class=\"status\">${status?'✓ Valid':'⚠ Revoked'}</span></div></div></div><div style=\"margin-top:28px\"><div class=\"label\">Description</div><p class=\"desc\">${htmlEscape(c.description||'No description provided.')}</p></div><div style=\"margin-top:28px\"><div class=\"label\">Skills</div><div class=\"skills\">${skills.map(x=>`<span class=\"skill\">${htmlEscape(x)}</span>`).join('')||'<span class=\"desc\">No skills listed.</span>'}</div></div><div class=\"footer\"><div><div class=\"label\">Certificate ID</div><div class=\"value\">${htmlEscape(c.certificate_number)}</div><div class=\"verify\">${htmlEscape(verify)}</div></div><div><b>${status?'Certificate Verified':'Certificate Revoked'}</b></div></div></div></section></main></body></html>`}
 async function hashPassword(password,saltB64){
   const salt=saltB64?fromB64(saltB64):crypto.getRandomValues(new Uint8Array(16));
   const key=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveBits']);
@@ -85,7 +89,7 @@ async function api(request,env){
   const url=new URL(request.url),p=url.pathname,m=request.method,s=await getSession(request,env);
   if(!originOK(request))return bad('Invalid request origin',403);
 
-  if(m==='GET'&&p.match(/^\/verify\/[^/]+$/)){const number=decodeURIComponent(p.split('/')[2]||'');const c=number?await env.DB.prepare('SELECT * FROM certificates WHERE certificate_number=?').bind(number).first():null;if(!c)return new Response('<h1>Certificate not found</h1>',{status:404,headers:{'content-type':'text/html; charset=utf-8'}});return new Response(credentialPage(c,request),{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=60'}})}
+  if(m==='GET'&&p.match(/^\/verify\/[^/]+$/)){const number=decodeURIComponent(p.split('/')[2]||'');const c=number?await env.DB.prepare('SELECT c.*,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.certificate_number=?').bind(number).first():null;if(!c)return new Response('<h1>Certificate not found</h1>',{status:404,headers:{'content-type':'text/html; charset=utf-8'}});return new Response(credentialPage(c,request),{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=60'}})}
   if(m==='POST'&&p==='/api/setup/admin'){
     const secret=request.headers.get('x-bootstrap-secret')||'';if(!env.ADMIN_BOOTSTRAP_SECRET||secret!==env.ADMIN_BOOTSTRAP_SECRET)return bad('Forbidden',403);
     const count=await env.DB.prepare('SELECT COUNT(*) c FROM admin_users').first();if(Number(count?.c||0)>0)return bad('Admin bootstrap is already locked',409);
@@ -158,7 +162,7 @@ async function api(request,env){
           let certificate=null;
           if(Number(existing.passed)===1 && Number(a.certificate_enabled??1)===1){
             const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
-            certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:existing.exam_id,a,score:Number(existing.score),total:Number(existing.total_points),percentage:Number(existing.percentage),resultId:resultRow?.id});
+            certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:existing.exam_id,a,score:Number(existing.score),total:Number(existing.total_points),percentage:Number(existing.percentage)});
           }
           return json({ok:true,result:{
             score:Number(existing.score),
@@ -218,13 +222,37 @@ async function api(request,env){
       let certificate=null;
       if(passed && Number(a.certificate_enabled??1)===1){
         const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
-        certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage,resultId:resultRow.id});
+        certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage});
       }
       return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),certificate}});
     }catch(e){
       console.error('EXAM SUBMIT ERROR:',e?.message||e);
       return json({error:'Exam submission failed',details:String(e?.message||e)},500);
     }
+  }
+
+  if(m==='GET'&&p.match(/^\/api\/results\/\d+$/)){
+    if(!userSession(s))return bad('Unauthorized',401);
+    const resultId=idNum(p.split('/')[3]);
+    if(!resultId)return bad('Invalid result');
+    const result=await env.DB.prepare(`
+      SELECT r.*,e.title,e.passing_percentage,u.student_id,u.full_name,u.email
+      FROM results r
+      JOIN exams e ON e.id=r.exam_id
+      JOIN users u ON u.id=r.user_id
+      WHERE r.id=? AND r.user_id=?
+    `).bind(resultId,s.user_id).first();
+    if(!result)return bad('Result not found',404);
+    const answers=await env.DB.prepare(`
+      SELECT a.question_id,a.selected_answer,a.is_correct,a.points_earned,
+             q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,
+             q.correct_answer,q.points,q.sort_order
+      FROM answers a
+      JOIN questions q ON q.id=a.question_id
+      WHERE a.attempt_id=?
+      ORDER BY q.sort_order,q.id
+    `).bind(result.attempt_id).all();
+    return json({result,answers:answers.results||[]});
   }
 
   if(m==='GET'&&p==='/api/results'){
@@ -296,8 +324,8 @@ async function api(request,env){
     }
     if(m==='PUT'&&p.match(/^\/api\/admin\/questions\/\d+$/)){const id=idNum(p.split('/')[4]),b=await body(request),points=Number(b?.points||1),attachments=normalizeAttachments(b?.attachments);if(!id||!clean(b?.questionText)||!['A','B','C','D'].includes(b?.correctAnswer)||points<=0)return bad('Invalid question fields');await env.DB.prepare('UPDATE questions SET question_text=?,option_a=?,option_b=?,option_c=?,option_d=?,correct_answer=?,points=?,sort_order=?,attachments_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(clean(b.questionText),clean(b.optionA),clean(b.optionB),clean(b.optionC),clean(b.optionD),b.correctAnswer,points,Number(b.sortOrder||0),JSON.stringify(attachments),id).run();return json({ok:true})}
     if(m==='DELETE'&&p.match(/^\/api\/admin\/questions\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid question');await env.DB.prepare('DELETE FROM questions WHERE id=?').bind(id).run();return json({ok:true})}
-    if(m==='GET'&&p==='/api/admin/certificates'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT c.*,u.student_id,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.certificate_number LIKE ? OR c.student_name LIKE ? OR c.student_email LIKE ? OR e.title LIKE ? ORDER BY c.issued_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
-    if(m==='GET'&&p.match(/^\/api\/admin\/certificates\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid certificate');const c=await env.DB.prepare('SELECT c.*,u.student_id,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.id=?').bind(id).first();if(!c)return bad('Certificate not found',404);return json(c)}
+    if(m==='GET'&&p==='/api/admin/certificates'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT c.*,u.student_id,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.certificate_number LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY c.issued_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
+    if(m==='GET'&&p.match(/^\/api\/admin\/certificates\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid certificate');const c=await env.DB.prepare('SELECT c.*,u.student_id,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.id=?').bind(id).first();if(!c)return bad('Certificate not found',404);return json(c)}
     if(m==='POST'&&p.match(/^\/api\/admin\/certificates\/\d+\/revoke$/)){const id=idNum(p.split('/')[4]),b=await body(request);if(!id)return bad('Invalid certificate');await env.DB.prepare("UPDATE certificates SET status='revoked',revoked_at=CURRENT_TIMESTAMP,revocation_reason=? WHERE id=?").bind(clean(b?.reason,500),id).run();return json({ok:true})}
     if(m==='POST'&&p.match(/^\/api\/admin\/certificates\/\d+\/restore$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid certificate');await env.DB.prepare("UPDATE certificates SET status='valid',revoked_at=NULL,revocation_reason=NULL WHERE id=?").bind(id).run();return json({ok:true})}
     if(m==='GET'&&p==='/api/admin/results'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE u.student_id LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY r.created_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
