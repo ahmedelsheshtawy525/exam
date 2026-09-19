@@ -1,18 +1,5 @@
-FMVA Exam Platform v12 — Student Results Review
-
-This version keeps the existing exam submission/result summary and adds a full student Results view.
-
-Student flow:
-1. Submit exam normally.
-2. Immediate completion page remains the score summary.
-3. Click Results in the top navigation after leaving the exam.
-4. The latest completed result opens as the same score-summary style page.
-5. Under the summary, the student sees every question, their submitted answer, the correct answer, correctness, and points.
-6. From the dashboard, clicking any row under My results opens that result's detailed review.
-
-Backend:
-- Added GET /api/results/:id for the logged-in owner only.
-- Returns result metadata plus answer/question details.
-- Does not expose other students' results.
-
-Frontend cache version: app.js?v=12.0
+VERSION 14
+Upload all files in this ZIP and deploy the Worker.
+Then hard refresh the browser.
+Student Results now recovers/returns certificates for every passed result, including older results that were created before certificate issuance was enabled.
+No SQL is required for this fix.

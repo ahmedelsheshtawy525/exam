@@ -236,7 +236,11 @@ async function api(request,env){
     const resultId=idNum(p.split('/')[3]);
     if(!resultId)return bad('Invalid result');
     const result=await env.DB.prepare(`
-      SELECT r.*,e.title,e.passing_percentage,u.student_id,u.full_name,u.email
+      SELECT r.*,e.title,e.description,e.passing_percentage,
+             e.certificate_enabled,e.certificate_title,e.certificate_issued_by,
+             e.certificate_type,e.certificate_level,e.certificate_format,
+             e.certificate_duration,e.certificate_description,e.certificate_skills_json,
+             u.student_id,u.full_name,u.email
       FROM results r
       JOIN exams e ON e.id=r.exam_id
       JOIN users u ON u.id=r.user_id
@@ -252,7 +256,43 @@ async function api(request,env){
       WHERE a.attempt_id=?
       ORDER BY q.sort_order,q.id
     `).bind(result.attempt_id).all();
-    return json({result,answers:answers.results||[]});
+
+    // Always return an already-issued certificate, even if the exam setting
+    // was later switched off. If a student has a passing result but no
+    // certificate yet, recover it here so old/past results are not stranded.
+    let certificate=null;
+    if(Number(result.passed)===1){
+      const existingCert=await env.DB.prepare(
+        'SELECT certificate_number,status FROM certificates WHERE attempt_id=?'
+      ).bind(String(result.attempt_id)).first();
+      if(existingCert){
+        certificate={
+          certificateNumber:existingCert.certificate_number,
+          verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existingCert.certificate_number)}`,
+          status:existingCert.status
+        };
+      }else{
+        certificate=await ensureCertificate(env,request,{
+          attemptId:result.attempt_id,
+          userId:s.user_id,
+          examId:result.exam_id,
+          a:result,
+          score:Number(result.score),
+          total:Number(result.total_points),
+          percentage:Number(result.percentage)
+        });
+      }
+    }
+    delete result.certificate_enabled;
+    delete result.certificate_title;
+    delete result.certificate_issued_by;
+    delete result.certificate_type;
+    delete result.certificate_level;
+    delete result.certificate_format;
+    delete result.certificate_duration;
+    delete result.certificate_description;
+    delete result.certificate_skills_json;
+    return json({result,answers:answers.results||[],certificate});
   }
 
   if(m==='GET'&&p==='/api/results'){
