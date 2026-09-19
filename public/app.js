@@ -150,7 +150,7 @@ async function submitExam(e,expired=false){
   try{
     const d=await api(`/api/attempts/${state.attemptId}/submit`,{method:'POST',body:JSON.stringify({answers,expired})});
     if(!d?.result) throw new Error('The exam was submitted but no result was returned');
-    state.lastResult={...(d.result||{}),certificate:d.certificate||d.result?.certificate||null};state.view='result';renderResult(state.lastResult);
+    state.lastResult={...d.result,certificate:d.certificate||d.result?.certificate||null};state.view='result';renderResult(state.lastResult);
   }catch(x){
     console.error('SUBMIT EXAM ERROR:',x);state.submitting=false;showError(x.message||'Unable to submit the exam','Unable to submit assessment');
     if(state.view==='exam')renderExam();
@@ -235,6 +235,7 @@ function renderResult(r){
       <div class="result-summary"><div class="eyebrow">${ar?'أداءك':'Your performance'}</div><h2>${message}</h2><p class="muted">${ar?'هذه النتيجة محسوبة تلقائياً بناءً على إجاباتك ودرجة النجاح المحددة للامتحان.':'This result was calculated automatically from your answers and the exam passing requirement.'}</p></div>
     </section>
     ${passed&&r.certificate?.verificationUrl?`<section class="card" style="margin-top:18px;padding:22px;border:1px solid #d9e8df;background:#f7fcf9"><div class="eyebrow">Credential issued</div><h3 style="margin:6px 0">Your certificate is ready</h3><p class="muted" style="margin:0 0 14px">Certificate ID: <b>${esc(r.certificate.certificateNumber||'')}</b></p><div class="actions"><a class="btn orange" href="${esc(r.certificate.verificationUrl)}" target="_blank" rel="noopener">Open Certificate ↗</a><button class="btn ghost" onclick="copyStudentId('${esc(r.certificate.verificationUrl).replaceAll("'","&#39;")}')">Copy Verification Link</button></div></section>`:''}
+    ${passed&&!r.certificate?.verificationUrl?`<section class="card" style="margin-top:18px;padding:22px;border:1px solid #f1d7d7;background:#fff9f9"><div class="eyebrow">Certificate</div><h3 style="margin:6px 0">Certificate could not be issued yet</h3><p class="muted" style="margin:0">${esc(r.certificateError||'The result was saved, but certificate issuance returned no certificate. Please refresh the Results page.')}</p></section>`:''}
     <section class="result-metrics">
       <div class="result-metric card"><span>${ar?'النقاط المحصلة':'Points earned'}</span><strong>${r.score} <small>/ ${r.totalPoints}</small></strong></div>
       <div class="result-metric card"><span>${ar?'درجة النجاح':'Pass mark'}</span><strong>${fallbackPassingPercentage.toFixed(0)}%</strong></div>
