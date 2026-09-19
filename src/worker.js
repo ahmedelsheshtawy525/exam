@@ -257,9 +257,9 @@ async function api(request,env){
       ORDER BY q.sort_order,q.id
     `).bind(result.attempt_id).all();
 
-    // Always return an already-issued certificate, even if the exam setting
-    // was later switched off. If a student has a passing result but no
-    // certificate yet, recover it here so old/past results are not stranded.
+    // Always return an already-issued certificate. If a student has a passing
+    // result but no certificate yet, recover it here. Certificate failures are
+    // isolated so the Results page itself never becomes a 500.
     let certificate=null;
     if(Number(result.passed)===1){
       const existingCert=await env.DB.prepare(
@@ -272,15 +272,20 @@ async function api(request,env){
           status:existingCert.status
         };
       }else{
-        certificate=await ensureCertificate(env,request,{
-          attemptId:result.attempt_id,
-          userId:s.user_id,
-          examId:result.exam_id,
-          a:result,
-          score:Number(result.score),
-          total:Number(result.total_points),
-          percentage:Number(result.percentage)
-        });
+        try{
+          certificate=await ensureCertificate(env,request,{
+            attemptId:result.attempt_id,
+            userId:s.user_id,
+            examId:result.exam_id,
+            a:result,
+            score:Number(result.score),
+            total:Number(result.total_points),
+            percentage:Number(result.percentage)
+          });
+        }catch(certError){
+          console.error('CERTIFICATE RECOVERY ERROR:',certError?.message||certError);
+          certificate=null;
+        }
       }
     }
     delete result.certificate_enabled;
