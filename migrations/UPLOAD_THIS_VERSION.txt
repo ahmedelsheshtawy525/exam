@@ -1,0 +1,14 @@
+FMVA EXAM PLATFORM - FIXED VERSION
+
+This package fixes the result-page issues:
+- Invalid Date on completed exams
+- Pass mark showing 0%
+- Questions answered showing — / — after a repeated submit/result load
+- Preserves the native credential system already included in this version
+- Preserves public certificate verification and admin certificate management
+
+Upload/deploy this project as the replacement for the current project.
+Database binding in wrangler.toml:
+  DB -> ahmed-finance-exam-db
+
+If migration 0007 was already applied in your Cloudflare D1 database, do NOT manually run it again.
