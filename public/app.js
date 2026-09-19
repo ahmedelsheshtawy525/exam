@@ -150,7 +150,7 @@ async function submitExam(e,expired=false){
   try{
     const d=await api(`/api/attempts/${state.attemptId}/submit`,{method:'POST',body:JSON.stringify({answers,expired})});
     if(!d?.result) throw new Error('The exam was submitted but no result was returned');
-    state.lastResult=d.result;state.view='result';renderResult(d.result);
+    state.lastResult={...(d.result||{}),certificate:d.certificate||d.result?.certificate||null};state.view='result';renderResult(state.lastResult);
   }catch(x){
     console.error('SUBMIT EXAM ERROR:',x);state.submitting=false;showError(x.message||'Unable to submit the exam','Unable to submit assessment');
     if(state.view==='exam')renderExam();
