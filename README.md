@@ -1,3 +1,7 @@
+
+## V8.1 patch
+- Added GET `/api/admin/exams/:id` compatibility endpoint to prevent 404s from cached/older admin UI flows.
+- Added static app.js cache-busting query on admin.html.
 # Ahmed Finance Exam Platform — Full MVP
 
 A production-oriented exam platform built for Cloudflare Workers + Cloudflare D1, with a visual language aligned to the Ahmed Elsheshtawy finance portfolio: warm off-white surfaces, graphite text, orange accent, thin borders, quiet cards, generous spacing, and responsive layouts.
@@ -14,8 +18,6 @@ A production-oriented exam platform built for Cloudflare Workers + Cloudflare D1
 - Exam entry
 - Server-enforced timer
 - Multiple-choice questions
-- External video/PDF learning resources without file storage in D1
-- Optional required learning path: Video/PDF → Exam
 - Correct answers never sent to the student browser
 - Submit + automatic grading
 - Pass/fail result
@@ -37,7 +39,6 @@ A production-oriented exam platform built for Cloudflare Workers + Cloudflare D1
 - Add/edit/delete questions
 - Set correct answers
 - Set points and order
-- Excel question import using the supplied template
 - Results search
 - Result detail with answer review
 - Super-admin management of admin accounts
@@ -162,32 +163,3 @@ npm run deploy
 ## Important deployment step
 
 Do not commit the real D1 database ID or any bootstrap secret to a public repository if your repository is public. Use Wrangler secrets for sensitive values.
-
-
-## Updates in this version
-
-- Exam resources support external PDF/video URLs only; files are not stored in D1.
-- Exam visibility is filtered server-side by student education system (General/Azhar), grade, and optional group.
-- The student exam list is sorted newest-first and hides scheduled/expired exams from students.
-- Admin Students has an end-of-year promotion action. It advances P1→P2→P3→S1→S2→S3 and permanently deletes S3 students before promotion.
-- The question Excel template is updated to the supplied `final.xlsx` format and the importer accepts `Skill` and `Topic`.
-- Migration `0015_exam_targeting.sql` must be applied to the D1 database before deploying this version.
-- Migration `0016_learning_resources.sql` adds the optional Video/PDF learning path and resource-open tracking.
-- Exam submission now writes answer rows through a D1 batch, reducing database round trips when many students submit at the same time.
-
-## Student credential emails
-
-The Admin student import now includes a **Send login details by email** button. New students created manually are also emailed automatically after creation.
-
-Email delivery uses Resend from the Cloudflare Worker. Configure:
-
-```bash
-npx wrangler secret put RESEND_API_KEY
-npx wrangler secret put RESEND_FROM_EMAIL
-```
-
-`RESEND_FROM_EMAIL` should be a verified sender/domain in Resend, for example `Excam <no-reply@yourdomain.com>`.
-
-
-## Free Gmail email sending
-For student credential emails without Resend, use the Google Apps Script relay in `gmail-relay/README.md`. It sends from your normal Gmail account.
