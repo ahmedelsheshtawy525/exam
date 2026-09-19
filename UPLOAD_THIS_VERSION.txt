@@ -1,0 +1,17 @@
+UPLOAD THIS VERSION
+
+This version fixes the result page display:
+- Invalid Date is handled safely.
+- Pass mark no longer falls back to 0%.
+- Questions answered no longer falls back to — / —.
+- App.js is cache-busted to v9.0 so Cloudflare/browser caches cannot keep the old result UI.
+- Native credential/certificate system is preserved.
+
+Cloudflare:
+1. Upload/replace the project files.
+2. Deploy the Worker.
+3. Hard-refresh the browser (Ctrl+Shift+R) once after deployment.
+4. Test the Financial Modeling & Valuation exam again.
+
+D1:
+If migration 0007 has already been applied in the current D1 database, do NOT run it again.

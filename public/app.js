@@ -23,7 +23,12 @@ const translations={
 function translateUI(){document.documentElement.lang=state.lang;document.documentElement.dir=state.lang==='ar'?'rtl':'ltr';if(state.lang!=='ar')return;const walker=document.createTreeWalker(app,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);for(const n of nodes){const v=n.nodeValue.trim();if(translations[v])n.nodeValue=n.nodeValue.replace(v,translations[v]);}}
 
 async function api(path,opts={}){const r=await fetch(path,{credentials:'same-origin',headers:{'content-type':'application/json',...(opts.headers||{})},...opts});let d=null;try{d=await r.json()}catch{}if(!r.ok)throw new Error(d?.error||'Request failed');return d}
-function fmtDate(v){return v?new Date(v.replace(' ','T')+'Z').toLocaleString():''}
+function fmtDate(v){
+  if(!v)return '';
+  const s=String(v).trim();
+  const d=new Date(s.includes('T')?s:s.replace(' ','T')+'Z');
+  return Number.isNaN(d.getTime())?'':d.toLocaleString();
+}
 function fmtSchedule(v){return v?new Date(v).toLocaleString([], {dateStyle:'medium',timeStyle:'short'}):'Immediately'}
 function localInputValue(v){if(!v)return '';const d=new Date(v);if(Number.isNaN(d.getTime()))return '';const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
 function scheduleState(e){const now=Date.now(),start=e.available_from?Date.parse(e.available_from):NaN,end=e.expires_at?Date.parse(e.expires_at):NaN;if(Number.isFinite(end)&&now>=end)return 'expired';if(Number.isFinite(start)&&now<start)return 'scheduled';return 'open'}
@@ -152,6 +157,10 @@ async function submitExam(e,expired=false){
   }
 }
 function renderResult(r){
+  // Defensive fallbacks for older result payloads / cached Worker responses.
+  const fallbackQuestionCount=Number(r.questionCount)>0?Number(r.questionCount):(Array.isArray(state.questions)?state.questions.length:0);
+  const fallbackAnsweredCount=Number(r.answeredCount)>=0?Number(r.answeredCount):(Array.isArray(state.questions)?state.questions.filter(q=>state.answers?.[q.id]).length:0);
+  const fallbackPassingPercentage=Number.isFinite(Number(r.passingPercentage))?Number(r.passingPercentage):50;
   const pct=Math.max(0,Math.min(100,Number(r.percentage)||0));
   const ar=state.lang==='ar';
   const passed=!!r.passed;
@@ -165,8 +174,8 @@ function renderResult(r){
     </section>
     <section class="result-metrics">
       <div class="result-metric card"><span>${ar?'النقاط المحصلة':'Points earned'}</span><strong>${r.score} <small>/ ${r.totalPoints}</small></strong></div>
-      <div class="result-metric card"><span>${ar?'درجة النجاح':'Pass mark'}</span><strong>${Number(r.passingPercentage??0).toFixed(0)}%</strong></div>
-      <div class="result-metric card"><span>${ar?'الأسئلة المُجاب عنها':'Questions answered'}</span><strong>${r.answeredCount??'—'} <small>/ ${r.questionCount??'—'}</small></strong></div>
+      <div class="result-metric card"><span>${ar?'درجة النجاح':'Pass mark'}</span><strong>${fallbackPassingPercentage.toFixed(0)}%</strong></div>
+      <div class="result-metric card"><span>${ar?'الأسئلة المُجاب عنها':'Questions answered'}</span><strong>${fallbackAnsweredCount} <small>/ ${fallbackQuestionCount}</small></strong></div>
     </section>
     <div class="result-actions">${passed&&r.certificate?.verificationUrl?`<a class="btn orange" href="${esc(r.certificate.verificationUrl)}" target="_blank" rel="noopener">${ar?'فتح الشهادة':'Open Certificate'} ↗</a>`:''}${passed&&r.certificate?.verificationUrl?`<button class="btn ghost" onclick="copyStudentId('${esc(r.certificate.verificationUrl).replaceAll("'","&#39;")}')">${ar?'نسخ رابط الشهادة':'Copy Certificate Link'}</button>`:''}${!passed&&r.examId?`<button class="btn orange" onclick="startExam(${Number(r.examId)})">${ar?'إعادة الامتحان':'Retake Exam'} ↗</button>`:''}<button class="btn ghost" onclick="go('dashboard')">${ar?'العودة إلى لوحة التحكم':'Back to Dashboard'} ↗</button></div>
   </div></main>`);
