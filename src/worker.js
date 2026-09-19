@@ -309,9 +309,39 @@ async function api(request,env){
     }
   }
 
-  if(m==='GET'&&p.match(/^\/api\/certificates\/[A-Za-z0-9-]+$/))return certificateResponse(request,env,p.split('/')[3]);
-  if(m==='GET'&&p==='/api/certificates'){if(!userSession(s))return bad('Unauthorized',401);const rows=await env.DB.prepare(`SELECT c.certificate_id,c.issued_at,c.email_sent,e.title,r.percentage FROM certificates c JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE c.user_id=? ORDER BY c.issued_at DESC`).bind(s.user_id).all();return json((rows.results||[]).map(x=>({...x,certificateUrl:absoluteUrl(request,`/certificate/${x.certificate_id}`,env)})))}
+if(m==='GET'&&p.match(/^\/api\/certificates\/[A-Za-z0-9-]+$/))
+  return certificateResponse(request,env,p.split('/')[3]);
 
+if(m==='GET'&&p==='/api/certificates'){
+  if(!userSession(s))return bad('Unauthorized',401);
+
+  const rows=await env.DB.prepare(`
+    SELECT
+      c.id,
+      c.certificate_number,
+      c.verification_token,
+      c.issued_at,
+      c.status,
+      c.percentage,
+      c.title,
+      c.exam_id,
+      e.title AS exam_title
+    FROM certificates c
+    LEFT JOIN exams e ON e.id=c.exam_id
+    WHERE c.user_id=?
+    ORDER BY c.issued_at DESC
+  `).bind(s.user_id).all();
+
+  return json((rows.results||[]).map(x=>({
+    ...x,
+    certificateId:x.id,
+    certificateUrl:absoluteUrl(
+      request,
+      `/certificate/${x.id}`,
+      env
+    )
+  })));
+}
   if(m==='GET'&&p==='/api/results'){
     if(!userSession(s))return bad('Unauthorized',401);const rows=await env.DB.prepare('SELECT r.*,e.title,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.user_id=? ORDER BY r.created_at DESC').bind(s.user_id).all();return json(rows.results||[]);
   }
