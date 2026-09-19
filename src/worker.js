@@ -28,6 +28,31 @@ function passwordOK(v){return typeof v==='string'&&v.length>=8&&v.length<=128}
 function emailOK(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
 function phoneOK(v){return v===''||/^[+0-9][0-9 ()-]{6,19}$/.test(v)}
 function now(){return Math.floor(Date.now()/1000)}
+function absoluteUrl(request,path,env){const base=(env.PUBLIC_BASE_URL||new URL(request.url).origin).replace(/\/$/,'');return `${base}${path}`}
+function certificateId(){return `AE-${new Date().getFullYear()}-${randomHex(8).toUpperCase()}`}
+async function sendCertificateEmail(env,{to,name,examTitle,certificateUrl,percentage,certificateId}){
+  if(!env.RESEND_API_KEY||!env.RESEND_FROM_EMAIL)return {sent:false,reason:'email_not_configured'};
+  const html=`<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#171717"><h2>Ahmed Elsheshtawy</h2><p>Ahmed Finance · Exam Platform</p><hr><p>Dear ${clean(name,120)},</p><h1>Congratulations on passing!</h1><p>You successfully passed <strong>${clean(examTitle,200)}</strong> with a score of <strong>${Number(percentage).toFixed(1)}%</strong>.</p><p>Your certificate has been issued and is publicly verifiable.</p><p><a href="${certificateUrl}" style="display:inline-block;background:#f97316;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">View & Share Certificate</a></p><p>Certificate ID: ${certificateId}</p><p style="color:#666">You can share this certificate link with anyone who needs to verify your achievement.</p></div>`;
+  const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:env.RESEND_FROM_EMAIL,to:[to],subject:`Your certificate — ${examTitle}`,html})});
+  if(!r.ok){console.error('CERTIFICATE EMAIL ERROR:',await r.text());return {sent:false,reason:'email_send_failed'}}
+  return {sent:true};
+}
+async function ensureCertificate(env,request,resultId){
+  const existing=await env.DB.prepare(`SELECT c.*,u.full_name,u.email,e.title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.result_id=?`).bind(resultId).first();
+  if(existing)return {certificateId:existing.certificate_id,certificateUrl:absoluteUrl(request,`/certificate/${existing.certificate_id}`,env),issuedAt:existing.issued_at,emailSent:Number(existing.email_sent||0)===1};
+  const r=await env.DB.prepare('SELECT r.id,r.user_id,r.exam_id,r.percentage,r.passed,u.full_name,u.email,e.title FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE r.id=?').bind(resultId).first();
+  if(!r||!r.passed)return null;
+  const cid=certificateId(),issuedAt=new Date().toISOString();
+  await env.DB.prepare('INSERT INTO certificates(certificate_id,result_id,user_id,exam_id,issued_at,email_sent) VALUES(?,?,?,?,?,0)').bind(cid,r.id,r.user_id,r.exam_id,issuedAt).run();
+  const url=absoluteUrl(request,`/certificate/${cid}`,env);
+  const mail=await sendCertificateEmail(env,{to:r.email,name:r.full_name,examTitle:r.title,certificateUrl:url,percentage:r.percentage,certificateId:cid});
+  if(mail.sent)await env.DB.prepare('UPDATE certificates SET email_sent=1,email_sent_at=CURRENT_TIMESTAMP WHERE certificate_id=?').bind(cid).run();
+  return {certificateId:cid,certificateUrl:url,issuedAt,emailSent:mail.sent};
+}
+function certificatePage(c){
+ const safe=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+ return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safe(c.title)} · Certificate</title><style>*{box-sizing:border-box}body{margin:0;background:#f5f2ed;color:#161616;font-family:Arial,sans-serif}.wrap{min-height:100vh;display:grid;place-items:center;padding:28px}.cert{width:min(1120px,100%);background:#fff;border:1px solid #d9d4cc;box-shadow:0 20px 60px #00000014;position:relative;padding:64px;text-align:center}.cert:before{content:'';position:absolute;inset:16px;border:1px solid #e7e1d8}.logo{font-weight:800;font-size:24px}.brand{color:#f97316;margin-top:8px;font-size:12px;letter-spacing:.14em;text-transform:uppercase}.eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#777;margin-top:55px}.title{font-family:Georgia,serif;font-size:58px;margin:14px 0}.sub{color:#666}.name{font-family:Georgia,serif;font-size:42px;margin:28px 0 10px}.exam{font-size:25px;font-weight:700;margin:10px 0}.meta{display:flex;justify-content:center;gap:55px;margin:35px 0}.meta div{display:grid;gap:7px}.meta span{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#888}.verify{margin-top:40px;padding-top:20px;border-top:1px solid #e4dfd7;color:#777;font-size:12px}.verify a{color:#f97316;word-break:break-all}.actions{margin-top:20px;display:flex;justify-content:center;gap:10px}.btn{border:0;border-radius:9px;padding:12px 18px;font-weight:700;cursor:pointer}.primary{background:#f97316;color:white}.ghost{background:#eee}@media(max-width:700px){.cert{padding:38px 22px}.title{font-size:42px}.name{font-size:31px}.exam{font-size:20px}.meta{gap:20px;flex-wrap:wrap}}@media print{body{background:#fff}.wrap{padding:0}.cert{box-shadow:none;border:0;min-height:100vh}.actions{display:none}}</style></head><body><main class="wrap"><article class="cert"><div class="logo">Ahmed Elsheshtawy</div><div class="brand">Ahmed Finance · Exam Platform</div><div class="eyebrow">Certificate of Completion</div><div class="title">Certificate</div><div class="sub">This certificate is proudly presented to</div><div class="name">${safe(c.full_name)}</div><div class="sub">for successfully passing the assessment</div><div class="exam">${safe(c.title)}</div><div class="meta"><div><span>Score</span><b>${Number(c.percentage).toFixed(1)}%</b></div><div><span>Issued</span><b>${new Date(c.issued_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</b></div><div><span>Certificate ID</span><b>${safe(c.certificate_id)}</b></div></div><div class="verify">Public verification link<br><a href="${safe(c.url)}">${safe(c.url)}</a></div><div class="actions"><button class="btn primary" onclick="window.print()">Print / Save PDF</button><button class="btn ghost" onclick="navigator.clipboard?.writeText(location.href);this.textContent='Link copied'">Copy public link</button></div></article></main></body></html>`,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=300'}})}
+
 function isoOrNull(v){if(v===null||v===undefined||String(v).trim()==='')return null;const t=Date.parse(String(v));return Number.isFinite(t)?new Date(t).toISOString():null}
 function availabilityState(startAt,expiresAt){const t=Date.now();const s=startAt?Date.parse(startAt):NaN,e=expiresAt?Date.parse(expiresAt):NaN;if(Number.isFinite(e)&&t>=e)return 'expired';if(Number.isFinite(s)&&t<s)return 'scheduled';return 'open'}
 async function hashPassword(password,saltB64){
@@ -58,6 +83,8 @@ async function createSession(env,kind,id,request){
 }
 async function logout(request,env){const sid=sessionId(request);if(sid)await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(sid).run();return new Response(null,{status:204,headers:{'set-cookie':clearCookie(SESSION_COOKIE)}})}
 function adminOnly(s){return adminSession(s)?null:bad('Admin authorization required',403)}
+
+async function certificateResponse(request,env,cid){const c=await env.DB.prepare(`SELECT c.certificate_id,c.issued_at,u.full_name,e.title,r.percentage FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE c.certificate_id=?`).bind(cid).first();if(!c)return bad('Certificate not found',404);return json({...c,certificateUrl:absoluteUrl(request,`/certificate/${cid}`,env)})}
 
 async function api(request,env){
   const url=new URL(request.url),p=url.pathname,m=request.method,s=await getSession(request,env);
@@ -128,9 +155,10 @@ async function api(request,env){
       if(!a)return bad('Attempt not found',404);
 
       if(a.status!=='in_progress'){
-        const existing=await env.DB.prepare(`SELECT r.score,r.total_points,r.percentage,r.passed,e.title AS examTitle FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.attempt_id=?`).bind(id).first();
+        const existing=await env.DB.prepare(`SELECT r.id,r.score,r.total_points,r.percentage,r.passed,e.title AS examTitle,e.id AS examId,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.attempt_id=?`).bind(id).first();
         if(existing){
-          return json({ok:true,result:{score:Number(existing.score),totalPoints:Number(existing.total_points),percentage:Number(existing.percentage),passed:Number(existing.passed),examTitle:existing.examTitle}});
+          const certificate=Number(existing.passed)?await ensureCertificate(env,request,existing.id):null;
+          return json({ok:true,result:{score:Number(existing.score),totalPoints:Number(existing.total_points),percentage:Number(existing.percentage),passed:Number(existing.passed),examTitle:existing.examTitle,examId:existing.examId,passingPercentage:Number(existing.passing_percentage),certificate}});
         }
         return bad('Attempt already submitted',409);
       }
@@ -172,14 +200,18 @@ async function api(request,env){
 
       await env.DB.prepare(`UPDATE exam_attempts SET status='submitted',submitted_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id).run();
 
-      await env.DB.prepare(`INSERT INTO results(attempt_id,user_id,exam_id,score,total_points,percentage,passed) VALUES(?,?,?,?,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET score=excluded.score,total_points=excluded.total_points,percentage=excluded.percentage,passed=excluded.passed`).bind(id,s.user_id,a.exam_id,score,total,percentage,passed).run();
-
-      return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString()}});
+      const resultInsert=await env.DB.prepare(`INSERT INTO results(attempt_id,user_id,exam_id,score,total_points,percentage,passed) VALUES(?,?,?,?,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET score=excluded.score,total_points=excluded.total_points,percentage=excluded.percentage,passed=excluded.passed`).bind(id,s.user_id,a.exam_id,score,total,percentage,passed).run();
+      const resultId=resultInsert.meta.last_row_id;
+      const certificate=passed?await ensureCertificate(env,request,resultId):null;
+      return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),certificate}});
     }catch(e){
       console.error('EXAM SUBMIT ERROR:',e?.message||e);
       return json({error:'Exam submission failed',details:String(e?.message||e)},500);
     }
   }
+
+  if(m==='GET'&&p.match(/^\/api\/certificates\/[A-Za-z0-9-]+$/))return certificateResponse(request,env,p.split('/')[3]);
+  if(m==='GET'&&p==='/api/certificates'){if(!userSession(s))return bad('Unauthorized',401);const rows=await env.DB.prepare(`SELECT c.certificate_id,c.issued_at,c.email_sent,e.title,r.percentage FROM certificates c JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE c.user_id=? ORDER BY c.issued_at DESC`).bind(s.user_id).all();return json((rows.results||[]).map(x=>({...x,certificateUrl:absoluteUrl(request,`/certificate/${x.certificate_id}`,env)})))}
 
   if(m==='GET'&&p==='/api/results'){
     if(!userSession(s))return bad('Unauthorized',401);const rows=await env.DB.prepare('SELECT r.*,e.title,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.user_id=? ORDER BY r.created_at DESC').bind(s.user_id).all();return json(rows.results||[]);
@@ -253,6 +285,7 @@ async function api(request,env){
     if(m==='GET'&&p==='/api/admin/results'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE u.student_id LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY r.created_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
     if(m==='GET'&&p==='/api/admin/results/stats'){const d=await env.DB.prepare('SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN passed=1 THEN 1 ELSE 0 END),0) passed,COALESCE(SUM(CASE WHEN passed=0 THEN 1 ELSE 0 END),0) failed,COALESCE(AVG(percentage),0) average,COALESCE(MAX(percentage),0) highest,COALESCE(MIN(percentage),0) lowest FROM results').first();return json({total:Number(d.total||0),passed:Number(d.passed||0),failed:Number(d.failed||0),average:Number(d.average||0),highest:Number(d.highest||0),lowest:Number(d.lowest||0),passRate:Number(d.total?100*d.passed/d.total:0)})}
     if(m==='GET'&&p.match(/^\/api\/admin\/results\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid result');const r=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title,e.passing_percentage FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE r.id=?').bind(id).first();if(!r)return bad('Result not found',404);const answers=await env.DB.prepare('SELECT a.*,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_answer,q.points FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY q.sort_order,q.id').bind(r.attempt_id).all();return json({result:r,answers:answers.results||[]})}
+    if(m==='GET'&&p==='/api/admin/certificates'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare(`SELECT c.*,u.student_id,u.full_name,u.email,e.title,r.percentage FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE u.student_id LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY c.issued_at DESC`).bind(like,like,like,like).all();return json((rows.results||[]).map(x=>({...x,certificateUrl:absoluteUrl(request,`/certificate/${x.certificate_id}`,env)})))}
     if(m==='GET'&&p==='/api/admin/admins'){if(s.role!=='super_admin')return bad('Super admin required',403);const rows=await env.DB.prepare('SELECT id,username,role,status,created_at FROM admin_users ORDER BY created_at DESC').all();return json(rows.results||[])}
     if(m==='POST'&&p==='/api/admin/admins'){if(s.role!=='super_admin')return bad('Super admin required',403);const b=await body(request),username=clean(b?.username,80).toLowerCase();if(!/^[a-z0-9._-]{3,80}$/.test(username)||!passwordOK(b?.password)||!['admin','super_admin'].includes(b?.role||'admin'))return bad('Invalid admin fields');const exists=await env.DB.prepare('SELECT id FROM admin_users WHERE username=?').bind(username).first();if(exists)return bad('Username already exists',409);const ph=await hashPassword(b.password);const r=await env.DB.prepare('INSERT INTO admin_users(username,password_hash,password_salt,role,status) VALUES(?,?,?,?,?)').bind(username,ph.hash,ph.salt,b.role,'active').run();return json({id:r.meta.last_row_id},201)}
     if(m==='PATCH'&&p.match(/^\/api\/admin\/admins\/\d+$/)){if(s.role!=='super_admin')return bad('Super admin required',403);const id=idNum(p.split('/')[4]),b=await body(request);if(!id||!['active','blocked'].includes(b?.status))return bad('Invalid status');await env.DB.prepare('UPDATE admin_users SET status=? WHERE id=?').bind(b.status,id).run();return json({ok:true})}
@@ -260,4 +293,4 @@ async function api(request,env){
   return bad('Not found',404);
 }
 
-export default {async fetch(request,env){try{const url=new URL(request.url);const path=url.pathname;if(path.startsWith('/api/'))return api(request,env);if(path==='/admin'||path==='/admin/')return env.ASSETS.fetch(new Request(new URL('/admin.html',request.url),request));return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({error:'Internal server error'},500)}}};
+export default {async fetch(request,env){try{const url=new URL(request.url);const path=url.pathname;if(path.startsWith('/api/'))return api(request,env);const cm=path.match(/^\/certificate\/([A-Za-z0-9-]+)$/);if(request.method==='GET'&&cm){const c=await env.DB.prepare(`SELECT c.certificate_id,c.issued_at,u.full_name,e.title,r.percentage,r.score,r.total_points FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE c.certificate_id=?`).bind(cm[1]).first();if(!c)return new Response('Certificate not found',{status:404});return certificatePage({...c,url:absoluteUrl(request,`/certificate/${cm[1]}`,env)})}if(path==='/admin'||path==='/admin/')return env.ASSETS.fetch(new Request(new URL('/admin.html',request.url),request));return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({error:'Internal server error'},500)}}};
