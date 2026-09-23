@@ -23,26 +23,6 @@ function parseAttachments(value){
   try{return normalizeAttachments(JSON.parse(value||'[]'))}
   catch{return []}
 }
-function escapeHtml(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]))}
-function certificateNumber(){return `CERT-${new Date().getFullYear()}-${randomHex(5).slice(0,8).toUpperCase()}`}
-async function createCertificateAndNotify(request,env,{resultId,attemptId,userId,examId,score,totalPoints,percentage}){
-  const existing=await env.DB.prepare('SELECT * FROM certificates WHERE result_id=?').bind(resultId).first();
-  if(existing)return existing;
-  const token=randomHex(24),number=certificateNumber();
-  await env.DB.prepare(`INSERT INTO certificates(certificate_number,public_token,result_id,attempt_id,user_id,exam_id,issued_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(number,token,resultId,attemptId,userId,examId).run();
-  const cert=await env.DB.prepare(`SELECT c.*,u.full_name,u.email,u.student_id,e.title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.result_id=?`).bind(resultId).first();
-  if(env.GMAIL_APPS_SCRIPT_URL && env.GMAIL_APPS_SCRIPT_TOKEN && cert?.email){
-    try{
-      const certificateUrl=new URL(`/certificate/${encodeURIComponent(cert.public_token)}`,request.url).toString();
-      const resultUrl=new URL(`/certificate/${encodeURIComponent(cert.public_token)}/result`,request.url).toString();
-      const response=await fetch(env.GMAIL_APPS_SCRIPT_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:env.GMAIL_APPS_SCRIPT_TOKEN,students:[{email:cert.email,subject:`Your Excam Certificate – ${cert.title}`,text:`Congratulations ${cert.full_name}!\\n\\nYou passed ${cert.title} with ${Number(percentage).toFixed(1)}%.\\n\\nCertificate: ${certificateUrl}\\nDetailed result and answers: ${resultUrl}`,html:`<h2>Congratulations, ${escapeHtml(cert.full_name)}!</h2><p>You passed <b>${escapeHtml(cert.title)}</b> with a score of <b>${Number(percentage).toFixed(1)}%</b>.</p><p><a href="${certificateUrl}">View your certificate</a></p><p><a href="${resultUrl}">View your detailed result and answers</a></p>`,}]})});
-      const data=await response.json().catch(()=>({}));
-      if(response.ok && data?.ok){await env.DB.prepare('UPDATE certificates SET email_sent_at=CURRENT_TIMESTAMP,email_error=NULL WHERE id=?').bind(cert.id).run();cert.email_sent_at=new Date().toISOString();}
-      else {await env.DB.prepare('UPDATE certificates SET email_error=? WHERE id=?').bind(clean(data?.error||`Gmail relay HTTP ${response.status}`,1000),cert.id).run();}
-    }catch(e){await env.DB.prepare('UPDATE certificates SET email_error=? WHERE id=?').bind(clean(e?.message||e,1000),cert.id).run();}
-  }
-  return cert;
-}
 function idNum(v){const n=Number(v);return Number.isInteger(n)&&n>0?n:null}
 function passwordOK(v){return typeof v==='string'&&v.length>=8&&v.length<=128}
 function emailOK(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
@@ -50,6 +30,32 @@ function phoneOK(v){return v===''||/^[+0-9][0-9 ()-]{6,19}$/.test(v)}
 function now(){return Math.floor(Date.now()/1000)}
 function isoOrNull(v){if(v===null||v===undefined||String(v).trim()==='')return null;const t=Date.parse(String(v));return Number.isFinite(t)?new Date(t).toISOString():null}
 function availabilityState(startAt,expiresAt){const t=Date.now();const s=startAt?Date.parse(startAt):NaN,e=expiresAt?Date.parse(expiresAt):NaN;if(Number.isFinite(e)&&t>=e)return 'expired';if(Number.isFinite(s)&&t<s)return 'scheduled';return 'open'}
+function parseSkills(value){try{const a=Array.isArray(value)?value:JSON.parse(value||'[]');return a.map(x=>clean(x,80)).filter(Boolean).slice(0,30)}catch{return []}}
+function certificateNumber(){const d=new Date(),y=d.getUTCFullYear();return `CERT-${y}-${randomHex(5).slice(0,10).toUpperCase()}`}
+async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,total,percentage}){
+  const existing=await env.DB.prepare('SELECT certificate_number,status FROM certificates WHERE attempt_id=?').bind(String(attemptId)).first();
+  if(existing)return {certificateNumber:existing.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existing.certificate_number)}`,status:existing.status};
+  const u=await env.DB.prepare('SELECT full_name,email FROM users WHERE id=?').bind(userId).first();
+  if(!u)throw new Error('Student account not found while issuing certificate');
+  const certId=randomHex(16);
+  const certNo=certificateNumber();
+  const token=randomHex(24);
+  const skills=parseSkills(a.certificate_skills_json);
+  const issuedAt=new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO certificates(id,certificate_number,verification_token,attempt_id,user_id,exam_id,score,percentage,title,issued_by,type,level,format,duration,description,skills,issued_at,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(certId,certNo,token,String(attemptId),String(userId),String(examId),score,percentage,
+      clean(a.certificate_title||`${a.title} Certificate`,200),
+      clean(a.certificate_issued_by||'Ahmed Elsheshtawy',200),
+      clean(a.certificate_type||'Training',80),
+      clean(a.certificate_level||'Intermediate',80),
+      clean(a.certificate_format||'Online',80),
+      clean(a.certificate_duration||'',80),
+      clean(a.certificate_description||a.description||'',10000),
+      JSON.stringify(skills),issuedAt,'valid').run();
+  return {certificateNumber:certNo,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(certNo)}`,status:'valid'};
+}
+function htmlEscape(v){return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;')}
+function credentialPage(c,request){const origin=new URL(request.url).origin;const verify=`${origin}/verify/${encodeURIComponent(c.certificate_number)}`;const skills=parseSkills(c.skills);const status=c.status==='valid';return `<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>${htmlEscape(c.title)} — ${htmlEscape(c.student_name)}</title><style>body{margin:0;background:#f5f7fb;color:#172033;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:900px;margin:48px auto;padding:20px}.card{background:#fff;border:1px solid #e4e8ef;border-radius:24px;box-shadow:0 16px 50px #17203314;overflow:hidden}.hero{padding:42px;background:linear-gradient(135deg,#101828,#26364f);color:#fff}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.72}.hero h1{font-size:34px;margin:12px 0}.hero p{margin:6px 0;color:#dce5f2}.student{font-size:26px;font-weight:700}.body{padding:34px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.item{padding:16px;border:1px solid #e8ebf0;border-radius:14px}.label{font-size:12px;color:#667085;text-transform:uppercase;letter-spacing:.08em}.value{font-weight:650;margin-top:6px}.desc{line-height:1.7;color:#475467}.skills{display:flex;gap:8px;flex-wrap:wrap}.skill{padding:8px 11px;border-radius:999px;background:#eef2f7}.status{display:inline-flex;padding:8px 12px;border-radius:999px;font-weight:700;background:${status?'#e8f7ee':'#fdecec'};color:${status?'#18794e':'#b42318'}}.footer{margin-top:28px;padding-top:24px;border-top:1px solid #e8ebf0;display:flex;justify-content:space-between;gap:20px;align-items:end}.verify{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;color:#475467}@media(max-width:650px){.grid{grid-template-columns:1fr}.wrap{margin:10px auto}.hero{padding:28px}.body{padding:22px}.hero h1{font-size:27px}}</style></head><body><main class=\"wrap\"><section class=\"card\"><div class=\"hero\"><div class=\"eyebrow\">Verified Credential</div><h1>${htmlEscape(c.title)}</h1><p class=\"student\">${htmlEscape(c.student_name)}</p><p>Successfully completed <b>${htmlEscape(c.exam_title)}</b></p></div><div class=\"body\"><div class=\"grid\"><div class=\"item\"><div class=\"label\">Score</div><div class=\"value\">${Number(c.percentage).toFixed(1)}%</div></div><div class=\"item\"><div class=\"label\">Issued</div><div class=\"value\">${htmlEscape(new Date(String(c.issued_at).includes('T')?c.issued_at:c.issued_at+'Z').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}))}</div></div><div class=\"item\"><div class=\"label\">Issued by</div><div class=\"value\">${htmlEscape(c.issued_by)}</div></div><div class=\"item\"><div class=\"label\">Type</div><div class=\"value\">${htmlEscape(c.type)}</div></div><div class=\"item\"><div class=\"label\">Level</div><div class=\"value\">${htmlEscape(c.level)}</div></div><div class=\"item\"><div class=\"label\">Format</div><div class=\"value\">${htmlEscape(c.format)}</div></div><div class=\"item\"><div class=\"label\">Duration</div><div class=\"value\">${htmlEscape(c.duration||'—')}</div></div><div class=\"item\"><div class=\"label\">Status</div><div class=\"value\"><span class=\"status\">${status?'✓ Valid':'⚠ Revoked'}</span></div></div></div><div style=\"margin-top:28px\"><div class=\"label\">Description</div><p class=\"desc\">${htmlEscape(c.description||'No description provided.')}</p></div><div style=\"margin-top:28px\"><div class=\"label\">Skills</div><div class=\"skills\">${skills.map(x=>`<span class=\"skill\">${htmlEscape(x)}</span>`).join('')||'<span class=\"desc\">No skills listed.</span>'}</div></div><div class=\"footer\"><div><div class=\"label\">Certificate ID</div><div class=\"value\">${htmlEscape(c.certificate_number)}</div><div class=\"verify\">${htmlEscape(verify)}</div></div><div><b>${status?'Certificate Verified':'Certificate Revoked'}</b></div></div></div></section></main></body></html>`}
 async function hashPassword(password,saltB64){
   const salt=saltB64?fromB64(saltB64):crypto.getRandomValues(new Uint8Array(16));
   const key=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveBits']);
@@ -83,6 +89,7 @@ async function api(request,env){
   const url=new URL(request.url),p=url.pathname,m=request.method,s=await getSession(request,env);
   if(!originOK(request))return bad('Invalid request origin',403);
 
+  if(m==='GET'&&p.match(/^\/verify\/[^/]+$/)){const number=decodeURIComponent(p.split('/')[2]||'');const c=number?await env.DB.prepare('SELECT c.*,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.certificate_number=?').bind(number).first():null;if(!c)return new Response('<h1>Certificate not found</h1>',{status:404,headers:{'content-type':'text/html; charset=utf-8'}});return new Response(credentialPage(c,request),{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=60'}})}
   if(m==='POST'&&p==='/api/setup/admin'){
     const secret=request.headers.get('x-bootstrap-secret')||'';if(!env.ADMIN_BOOTSTRAP_SECRET||secret!==env.ADMIN_BOOTSTRAP_SECRET)return bad('Forbidden',403);
     const count=await env.DB.prepare('SELECT COUNT(*) c FROM admin_users').first();if(Number(count?.c||0)>0)return bad('Admin bootstrap is already locked',409);
@@ -112,7 +119,7 @@ async function api(request,env){
 
   if(m==='GET'&&p==='/api/exams'){
     if(!userSession(s)&&!adminSession(s))return bad('Unauthorized',401);
-    const rows=await env.DB.prepare(`SELECT e.id,e.title,e.description,e.duration_minutes,e.passing_percentage,e.status,e.created_at,e.attachments_json,e.desktop_required,e.available_from,e.expires_at,(SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id) question_count FROM exams e ${adminSession(s)?'':'WHERE e.status=\'active\' AND (e.expires_at IS NULL OR e.expires_at>datetime(\'now\'))'} ORDER BY COALESCE(e.available_from,e.created_at) ASC,e.created_at DESC`).all();const results=(rows.results||[]).map(e=>({...e,attachments:parseAttachments(e.attachments_json)}));return json(results);
+    const rows=await env.DB.prepare(`SELECT e.id,e.title,e.description,e.duration_minutes,e.passing_percentage,e.status,e.created_at,e.attachments_json,e.desktop_required,e.available_from,e.expires_at,e.certificate_enabled,e.certificate_title,e.certificate_issued_by,e.certificate_type,e.certificate_level,e.certificate_format,e.certificate_duration,e.certificate_description,e.certificate_skills_json,(SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id) question_count FROM exams e ${adminSession(s)?'':'WHERE e.status=\'active\' AND (e.expires_at IS NULL OR e.expires_at>datetime(\'now\'))'} ORDER BY COALESCE(e.available_from,e.created_at) ASC,e.created_at DESC`).all();const results=(rows.results||[]).map(e=>({...e,attachments:parseAttachments(e.attachments_json)}));return json(results);
   }
   if(m==='GET'&&p.match(/^\/api\/exams\/\d+\/start$/)){
     if(!userSession(s))return bad('Unauthorized',401);const id=idNum(p.split('/')[3]);const e=id?await env.DB.prepare('SELECT id,title,description,duration_minutes,passing_percentage,attachments_json,desktop_required FROM exams WHERE id=? AND status=\'active\'').bind(id).first():null;if(!e)return bad('Exam not found',404);
@@ -143,14 +150,39 @@ async function api(request,env){
     }
 
     try{
-      const a=await env.DB.prepare(`SELECT a.*,e.passing_percentage,e.duration_minutes,e.title FROM exam_attempts a JOIN exams e ON e.id=a.exam_id WHERE a.id=? AND a.user_id=?`).bind(id,s.user_id).first();
+      const a=await env.DB.prepare(`SELECT a.*,e.passing_percentage,e.duration_minutes,e.title,e.description,e.certificate_enabled,e.certificate_title,e.certificate_issued_by,e.certificate_type,e.certificate_level,e.certificate_format,e.certificate_duration,e.certificate_description,e.certificate_skills_json FROM exam_attempts a JOIN exams e ON e.id=a.exam_id WHERE a.id=? AND a.user_id=?`).bind(id,s.user_id).first();
 
       if(!a)return bad('Attempt not found',404);
 
       if(a.status!=='in_progress'){
-        const existing=await env.DB.prepare(`SELECT r.score,r.total_points,r.percentage,r.passed,e.title AS examTitle FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.attempt_id=?`).bind(id).first();
+        const existing=await env.DB.prepare(`SELECT r.score,r.total_points,r.percentage,r.passed,r.exam_id,e.title AS examTitle,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.attempt_id=?`).bind(id).first();
         if(existing){
-          return json({ok:true,result:{score:Number(existing.score),totalPoints:Number(existing.total_points),percentage:Number(existing.percentage),passed:Number(existing.passed),examTitle:existing.examTitle}});
+          const qCount=await env.DB.prepare('SELECT COUNT(*) AS c FROM questions WHERE exam_id=?').bind(existing.exam_id).first();
+          const answered=await env.DB.prepare('SELECT COUNT(*) AS c FROM answers WHERE attempt_id=? AND selected_answer IS NOT NULL').bind(id).first();
+          let certificate=null;
+          let certificateError=null;
+          if(Number(existing.passed)===1 && Number(a.certificate_enabled??1)===1){
+            try{
+              certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:existing.exam_id,a,score:Number(existing.score),total:Number(existing.total_points),percentage:Number(existing.percentage)});
+            }catch(certError){
+              certificateError=String(certError?.message||certError);
+              console.error('CERTIFICATE ISSUE ERROR:',certificateError);
+            }
+          }
+          return json({ok:true,result:{
+            score:Number(existing.score),
+            totalPoints:Number(existing.total_points),
+            percentage:Number(existing.percentage),
+            passed:Number(existing.passed),
+            examTitle:existing.examTitle,
+            examId:existing.exam_id,
+            passingPercentage:Number(existing.passing_percentage),
+            questionCount:Number(qCount?.c||0),
+            answeredCount:Number(answered?.c||0),
+            submittedAt:a.submitted_at||null,
+            certificate,
+            certificateError
+          }});
         }
         return bad('Attempt already submitted',409);
       }
@@ -193,52 +225,94 @@ async function api(request,env){
       await env.DB.prepare(`UPDATE exam_attempts SET status='submitted',submitted_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id).run();
 
       await env.DB.prepare(`INSERT INTO results(attempt_id,user_id,exam_id,score,total_points,percentage,passed) VALUES(?,?,?,?,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET score=excluded.score,total_points=excluded.total_points,percentage=excluded.percentage,passed=excluded.passed`).bind(id,s.user_id,a.exam_id,score,total,percentage,passed).run();
-      const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
       let certificate=null;
-      if(passed && resultRow?.id){
-        certificate=await createCertificateAndNotify(request,env,{resultId:resultRow.id,attemptId:id,userId:s.user_id,examId:a.exam_id,score,totalPoints:total,percentage});
+      let certificateError=null;
+      if(passed && Number(a.certificate_enabled??1)===1){
+        try{
+          certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage});
+        }catch(certError){
+          certificateError=String(certError?.message||certError);
+          console.error('CERTIFICATE ISSUE ERROR:',certificateError);
+        }
       }
-
-      return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),resultId:resultRow?.id||null,certificate:certificate?{certificateNumber:certificate.certificate_number,url:`/certificate/${encodeURIComponent(certificate.public_token)}`,emailSent:!!certificate.email_sent_at}:null}});
+      return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),certificate,certificateError}});
     }catch(e){
       console.error('EXAM SUBMIT ERROR:',e?.message||e);
       return json({error:'Exam submission failed',details:String(e?.message||e)},500);
     }
   }
 
-  if(m==='GET'&&p==='/api/results'){
-    if(!userSession(s))return bad('Unauthorized',401);const rows=await env.DB.prepare('SELECT r.*,e.title,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.user_id=? ORDER BY r.created_at DESC').bind(s.user_id).all();return json(rows.results||[]);
-  }
   if(m==='GET'&&p.match(/^\/api\/results\/\d+$/)){
     if(!userSession(s))return bad('Unauthorized',401);
-    const id=idNum(p.split('/')[3]);if(!id)return bad('Invalid result');
-    const r=await env.DB.prepare('SELECT r.*,e.title,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.id=? AND r.user_id=?').bind(id,s.user_id).first();
-    if(!r)return bad('Result not found',404);
-    const answers=await env.DB.prepare('SELECT a.*,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_answer,q.points FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY q.sort_order,q.id').bind(r.attempt_id).all();
-    return json({result:r,answers:answers.results||[]});
+    const resultId=idNum(p.split('/')[3]);
+    if(!resultId)return bad('Invalid result');
+    const result=await env.DB.prepare(`
+      SELECT r.*,e.title,e.description,e.passing_percentage,
+             e.certificate_enabled,e.certificate_title,e.certificate_issued_by,
+             e.certificate_type,e.certificate_level,e.certificate_format,
+             e.certificate_duration,e.certificate_description,e.certificate_skills_json,
+             u.student_id,u.full_name,u.email
+      FROM results r
+      JOIN exams e ON e.id=r.exam_id
+      JOIN users u ON u.id=r.user_id
+      WHERE r.id=? AND r.user_id=?
+    `).bind(resultId,s.user_id).first();
+    if(!result)return bad('Result not found',404);
+    const answers=await env.DB.prepare(`
+      SELECT a.question_id,a.selected_answer,a.is_correct,a.points_earned,
+             q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,
+             q.correct_answer,q.points,q.sort_order
+      FROM answers a
+      JOIN questions q ON q.id=a.question_id
+      WHERE a.attempt_id=?
+      ORDER BY q.sort_order,q.id
+    `).bind(result.attempt_id).all();
+
+    // Always return an already-issued certificate. If a student has a passing
+    // result but no certificate yet, recover it here. Certificate failures are
+    // isolated so the Results page itself never becomes a 500.
+    let certificate=null;
+    if(Number(result.passed)===1){
+      const existingCert=await env.DB.prepare(
+        'SELECT certificate_number,status FROM certificates WHERE attempt_id=?'
+      ).bind(String(result.attempt_id)).first();
+      if(existingCert){
+        certificate={
+          certificateNumber:existingCert.certificate_number,
+          verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existingCert.certificate_number)}`,
+          status:existingCert.status
+        };
+      }else{
+        try{
+          certificate=await ensureCertificate(env,request,{
+            attemptId:result.attempt_id,
+            userId:s.user_id,
+            examId:result.exam_id,
+            a:result,
+            score:Number(result.score),
+            total:Number(result.total_points),
+            percentage:Number(result.percentage)
+          });
+        }catch(certError){
+          console.error('CERTIFICATE RECOVERY ERROR:',certError?.message||certError);
+          certificate=null;
+        }
+      }
+    }
+    delete result.certificate_enabled;
+    delete result.certificate_title;
+    delete result.certificate_issued_by;
+    delete result.certificate_type;
+    delete result.certificate_level;
+    delete result.certificate_format;
+    delete result.certificate_duration;
+    delete result.certificate_description;
+    delete result.certificate_skills_json;
+    return json({result,answers:answers.results||[],certificate});
   }
-  if(m==='GET'&&p.match(/^\/api\/certificates\/[^/]+$/)){
-    const token=decodeURIComponent(p.split('/')[3]||'');
-    if(!token)return bad('Certificate not found',404);
-    const c=await env.DB.prepare(`SELECT c.id,c.certificate_number,c.public_token,c.issued_at,c.email_sent_at,u.full_name,u.student_id,e.title,r.score,r.total_points,r.percentage,r.passed,r.id result_id FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE c.public_token=? AND r.passed=1`).bind(token).first();
-    if(!c)return bad('Certificate not found',404);
-    return json({certificate:c,resultUrl:`/certificate/${encodeURIComponent(c.public_token)}/result`});
-  }
-  if(m==='GET'&&p.match(/^\/api\/certificates\/[^/]+\/result$/)){
-    const token=decodeURIComponent(p.split('/')[3]||'');
-    const c=await env.DB.prepare('SELECT result_id FROM certificates WHERE public_token=?').bind(token).first();
-    if(!c)return bad('Certificate not found',404);
-    const r=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,e.title,e.passing_percentage FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE r.id=? AND r.passed=1').bind(c.result_id).first();
-    if(!r)return bad('Result not found',404);
-    const answers=await env.DB.prepare('SELECT a.*,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_answer,q.points FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY q.sort_order,q.id').bind(r.attempt_id).all();
-    return json({result:r,answers:answers.results||[]});
-  }
-  if(m==='POST'&&p==='/api/certificates/verify'){
-    const b=await body(request),number=clean(b?.certificateNumber,80).toUpperCase(),email=clean(b?.email,160).toLowerCase();
-    if(!number||!email||!emailOK(email))return bad('Certificate number and valid email are required');
-    const c=await env.DB.prepare('SELECT public_token FROM certificates c JOIN users u ON u.id=c.user_id JOIN results r ON r.id=c.result_id WHERE c.certificate_number=? AND lower(u.email)=? AND r.passed=1').bind(number,email).first();
-    if(!c)return bad('Certificate not found',404);
-    return json({ok:true,token:c.public_token,url:`/certificate/${encodeURIComponent(c.public_token)}`});
+
+  if(m==='GET'&&p==='/api/results'){
+    if(!userSession(s))return bad('Unauthorized',401);const rows=await env.DB.prepare('SELECT r.*,e.title,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.user_id=? ORDER BY r.created_at DESC').bind(s.user_id).all();return json(rows.results||[]);
   }
 
   if(adminSession(s)){
@@ -283,9 +357,9 @@ async function api(request,env){
       const rows=await env.DB.prepare(`SELECT e.*, (SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id) question_count FROM exams e ORDER BY e.created_at DESC`).all();return json(rows.results||[]);
     }
     if(m==='POST'&&(p==='/api/admin/exams'||p==='/api/admin/exams/')){
-      const b=await body(request),title=clean(b?.title,200),duration=Number(b?.durationMinutes),pass=Number(b?.passingPercentage),attachments=normalizeAttachments(b?.attachments),desktopRequired=b?.desktopRequired?1:0,availableFrom=isoOrNull(b?.availableFrom),availabilityHours=b?.availabilityHours===''||b?.availabilityHours==null?null:Number(b?.availabilityHours);if(!title||!Number.isInteger(duration)||duration<1||duration>600||!Number.isFinite(pass)||pass<0||pass>100)return bad('Invalid exam fields');if(b?.availableFrom&&!availableFrom)return bad('Invalid availability start date');if(availabilityHours!==null&&(!Number.isFinite(availabilityHours)||availabilityHours<1||availabilityHours>720))return bad('Availability window must be between 1 and 720 hours');const expiresAt=availableFrom&&availabilityHours!==null?new Date(Date.parse(availableFrom)+availabilityHours*3600000).toISOString():null;const r=await env.DB.prepare('INSERT INTO exams(title,description,duration_minutes,passing_percentage,status,created_by,attachments_json,desktop_required,available_from,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(title,clean(b?.description),duration,pass,b?.status==='active'?'active':'inactive',s.admin_user_id,JSON.stringify(attachments),desktopRequired,availableFrom,expiresAt).run();return json({id:r.meta.last_row_id},201);
+      const b=await body(request),title=clean(b?.title,200),duration=Number(b?.durationMinutes),pass=Number(b?.passingPercentage),attachments=normalizeAttachments(b?.attachments),desktopRequired=b?.desktopRequired?1:0,availableFrom=isoOrNull(b?.availableFrom),availabilityHours=b?.availabilityHours===''||b?.availabilityHours==null?null:Number(b?.availabilityHours);if(!title||!Number.isInteger(duration)||duration<1||duration>600||!Number.isFinite(pass)||pass<0||pass>100)return bad('Invalid exam fields');if(b?.availableFrom&&!availableFrom)return bad('Invalid availability start date');if(availabilityHours!==null&&(!Number.isFinite(availabilityHours)||availabilityHours<1||availabilityHours>720))return bad('Availability window must be between 1 and 720 hours');const expiresAt=availableFrom&&availabilityHours!==null?new Date(Date.parse(availableFrom)+availabilityHours*3600000).toISOString():null;const r=await env.DB.prepare('INSERT INTO exams(title,description,duration_minutes,passing_percentage,status,created_by,attachments_json,desktop_required,available_from,expires_at,certificate_enabled,certificate_title,certificate_issued_by,certificate_type,certificate_level,certificate_format,certificate_duration,certificate_description,certificate_skills_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(title,clean(b?.description),duration,pass,b?.status==='active'?'active':'inactive',s.admin_user_id,JSON.stringify(attachments),desktopRequired,availableFrom,expiresAt,b?.certificateEnabled===false?0:1,clean(b?.certificateTitle,200),clean(b?.certificateIssuedBy||'Ahmed Elsheshtawy',200),clean(b?.certificateType||'Training',80),clean(b?.certificateLevel||'Intermediate',80),clean(b?.certificateFormat||'Online',80),clean(b?.certificateDuration,80),clean(b?.certificateDescription||'',10000),JSON.stringify(parseSkills(b?.certificateSkills))).run();return json({id:r.meta.last_row_id},201);
     }
-    if(m==='PUT'&&p.match(/^\/api\/admin\/exams\/(\d+)\/?$/)){const id=idNum((p.match(/^\/api\/admin\/exams\/(\d+)/)||[])[1]),b=await body(request),duration=Number(b?.durationMinutes),pass=Number(b?.passingPercentage),desktopRequired=b?.desktopRequired?1:0,availableFrom=isoOrNull(b?.availableFrom),availabilityHours=b?.availabilityHours===''||b?.availabilityHours==null?null:Number(b?.availabilityHours);if(!id||!clean(b?.title)||!Number.isInteger(duration)||duration<1||duration>600||pass<0||pass>100)return bad('Invalid exam fields');if(b?.availableFrom&&!availableFrom)return bad('Invalid availability start date');if(availabilityHours!==null&&(!Number.isFinite(availabilityHours)||availabilityHours<1||availabilityHours>720))return bad('Availability window must be between 1 and 720 hours');const expiresAt=availableFrom&&availabilityHours!==null?new Date(Date.parse(availableFrom)+availabilityHours*3600000).toISOString():null;if(Object.prototype.hasOwnProperty.call(b,'attachments')){const attachments=normalizeAttachments(b.attachments);await env.DB.prepare('UPDATE exams SET title=?,description=?,duration_minutes=?,passing_percentage=?,status=?,attachments_json=?,desktop_required=?,available_from=?,expires_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(clean(b.title,200),clean(b.description),duration,pass,b.status==='active'?'active':'inactive',JSON.stringify(attachments),desktopRequired,availableFrom,expiresAt,id).run()}else{await env.DB.prepare('UPDATE exams SET title=?,description=?,duration_minutes=?,passing_percentage=?,status=?,desktop_required=?,available_from=?,expires_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(clean(b.title,200),clean(b.description),duration,pass,b.status==='active'?'active':'inactive',desktopRequired,availableFrom,expiresAt,id).run()}return json({ok:true})}
+    if(m==='PUT'&&p.match(/^\/api\/admin\/exams\/(\d+)\/?$/)){const id=idNum((p.match(/^\/api\/admin\/exams\/(\d+)/)||[])[1]),b=await body(request),duration=Number(b?.durationMinutes),pass=Number(b?.passingPercentage),desktopRequired=b?.desktopRequired?1:0,availableFrom=isoOrNull(b?.availableFrom),availabilityHours=b?.availabilityHours===''||b?.availabilityHours==null?null:Number(b?.availabilityHours);if(!id||!clean(b?.title)||!Number.isInteger(duration)||duration<1||duration>600||pass<0||pass>100)return bad('Invalid exam fields');if(b?.availableFrom&&!availableFrom)return bad('Invalid availability start date');if(availabilityHours!==null&&(!Number.isFinite(availabilityHours)||availabilityHours<1||availabilityHours>720))return bad('Availability window must be between 1 and 720 hours');const expiresAt=availableFrom&&availabilityHours!==null?new Date(Date.parse(availableFrom)+availabilityHours*3600000).toISOString():null;if(Object.prototype.hasOwnProperty.call(b,'attachments')){const attachments=normalizeAttachments(b.attachments);await env.DB.prepare('UPDATE exams SET title=?,description=?,duration_minutes=?,passing_percentage=?,status=?,attachments_json=?,desktop_required=?,available_from=?,expires_at=?,certificate_enabled=?,certificate_title=?,certificate_issued_by=?,certificate_type=?,certificate_level=?,certificate_format=?,certificate_duration=?,certificate_description=?,certificate_skills_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(clean(b.title,200),clean(b.description),duration,pass,b.status==='active'?'active':'inactive',JSON.stringify(attachments),desktopRequired,availableFrom,expiresAt,b.certificateEnabled===false?0:1,clean(b.certificateTitle,200),clean(b.certificateIssuedBy||'Ahmed Elsheshtawy',200),clean(b.certificateType||'Training',80),clean(b.certificateLevel||'Intermediate',80),clean(b.certificateFormat||'Online',80),clean(b.certificateDuration,80),clean(b.certificateDescription||'',10000),JSON.stringify(parseSkills(b.certificateSkills)),id).run()}else{await env.DB.prepare('UPDATE exams SET title=?,description=?,duration_minutes=?,passing_percentage=?,status=?,desktop_required=?,available_from=?,expires_at=?,certificate_enabled=?,certificate_title=?,certificate_issued_by=?,certificate_type=?,certificate_level=?,certificate_format=?,certificate_duration=?,certificate_description=?,certificate_skills_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(clean(b.title,200),clean(b.description),duration,pass,b.status==='active'?'active':'inactive',desktopRequired,availableFrom,expiresAt,b.certificateEnabled===false?0:1,clean(b.certificateTitle,200),clean(b.certificateIssuedBy||'Ahmed Elsheshtawy',200),clean(b.certificateType||'Training',80),clean(b.certificateLevel||'Intermediate',80),clean(b.certificateFormat||'Online',80),clean(b.certificateDuration,80),clean(b.certificateDescription||'',10000),JSON.stringify(parseSkills(b.certificateSkills)),id).run()}return json({ok:true})}
     if(m==='DELETE'&&p.match(/^\/api\/admin\/exams\/(\d+)\/?$/)){const id=idNum((p.match(/^\/api\/admin\/exams\/(\d+)/)||[])[1]);if(!id)return bad('Invalid exam');await env.DB.prepare('DELETE FROM exams WHERE id=?').bind(id).run();return json({ok:true})}
     if(m==='GET'&&p.match(/^\/api\/admin\/exams\/\d+\/questions$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid exam');const rows=await env.DB.prepare('SELECT * FROM questions WHERE exam_id=? ORDER BY sort_order,id').bind(id).all();return json((rows.results||[]).map(q=>({...q,attachments:parseAttachments(q.attachments_json)})))}
     if(m==='POST'&&p==='/api/admin/questions/bulk'){
@@ -306,6 +380,10 @@ async function api(request,env){
     }
     if(m==='PUT'&&p.match(/^\/api\/admin\/questions\/\d+$/)){const id=idNum(p.split('/')[4]),b=await body(request),points=Number(b?.points||1),attachments=normalizeAttachments(b?.attachments);if(!id||!clean(b?.questionText)||!['A','B','C','D'].includes(b?.correctAnswer)||points<=0)return bad('Invalid question fields');await env.DB.prepare('UPDATE questions SET question_text=?,option_a=?,option_b=?,option_c=?,option_d=?,correct_answer=?,points=?,sort_order=?,attachments_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(clean(b.questionText),clean(b.optionA),clean(b.optionB),clean(b.optionC),clean(b.optionD),b.correctAnswer,points,Number(b.sortOrder||0),JSON.stringify(attachments),id).run();return json({ok:true})}
     if(m==='DELETE'&&p.match(/^\/api\/admin\/questions\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid question');await env.DB.prepare('DELETE FROM questions WHERE id=?').bind(id).run();return json({ok:true})}
+    if(m==='GET'&&p==='/api/admin/certificates'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT c.*,u.student_id,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.certificate_number LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY c.issued_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
+    if(m==='GET'&&p.match(/^\/api\/admin\/certificates\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid certificate');const c=await env.DB.prepare('SELECT c.*,u.student_id,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.id=?').bind(id).first();if(!c)return bad('Certificate not found',404);return json(c)}
+    if(m==='POST'&&p.match(/^\/api\/admin\/certificates\/\d+\/revoke$/)){const id=idNum(p.split('/')[4]),b=await body(request);if(!id)return bad('Invalid certificate');await env.DB.prepare("UPDATE certificates SET status='revoked',revoked_at=CURRENT_TIMESTAMP,revocation_reason=? WHERE id=?").bind(clean(b?.reason,500),id).run();return json({ok:true})}
+    if(m==='POST'&&p.match(/^\/api\/admin\/certificates\/\d+\/restore$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid certificate');await env.DB.prepare("UPDATE certificates SET status='valid',revoked_at=NULL,revocation_reason=NULL WHERE id=?").bind(id).run();return json({ok:true})}
     if(m==='GET'&&p==='/api/admin/results'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE u.student_id LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY r.created_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
     if(m==='GET'&&p==='/api/admin/results/stats'){const d=await env.DB.prepare('SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN passed=1 THEN 1 ELSE 0 END),0) passed,COALESCE(SUM(CASE WHEN passed=0 THEN 1 ELSE 0 END),0) failed,COALESCE(AVG(percentage),0) average,COALESCE(MAX(percentage),0) highest,COALESCE(MIN(percentage),0) lowest FROM results').first();return json({total:Number(d.total||0),passed:Number(d.passed||0),failed:Number(d.failed||0),average:Number(d.average||0),highest:Number(d.highest||0),lowest:Number(d.lowest||0),passRate:Number(d.total?100*d.passed/d.total:0)})}
     if(m==='GET'&&p.match(/^\/api\/admin\/results\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid result');const r=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title,e.passing_percentage FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE r.id=?').bind(id).first();if(!r)return bad('Result not found',404);const answers=await env.DB.prepare('SELECT a.*,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_answer,q.points FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY q.sort_order,q.id').bind(r.attempt_id).all();return json({result:r,answers:answers.results||[]})}
@@ -316,4 +394,4 @@ async function api(request,env){
   return bad('Not found',404);
 }
 
-export default {async fetch(request,env){try{const url=new URL(request.url);const path=url.pathname;if(path.startsWith('/api/'))return api(request,env);if(path==='/admin'||path==='/admin/')return env.ASSETS.fetch(new Request(new URL('/admin.html',request.url),request));if(path==='/certificate'||path.startsWith('/certificate/'))return env.ASSETS.fetch(new Request(new URL('/index.html',request.url)));return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({error:'Internal server error'},500)}}};
+export default {async fetch(request,env){try{const url=new URL(request.url);const path=url.pathname;if(path.startsWith('/api/'))return api(request,env);if(path==='/admin'||path==='/admin/')return env.ASSETS.fetch(new Request(new URL('/admin.html',request.url),request));return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({error:'Internal server error'},500)}}};
