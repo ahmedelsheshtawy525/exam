@@ -30,12 +30,58 @@ function phoneOK(v){return v===''||/^[+0-9][0-9 ()-]{6,19}$/.test(v)}
 function now(){return Math.floor(Date.now()/1000)}
 function absoluteUrl(request,path,env){const base=(env.PUBLIC_BASE_URL||new URL(request.url).origin).replace(/\/$/,'');return `${base}${path}`}
 function certificateId(){return `AE-${new Date().getFullYear()}-${randomHex(8).toUpperCase()}`}
+async function sendGmailRelayEmail(env,{to,subject,text,html}){
+  if(!env.GMAIL_APPS_SCRIPT_URL||!env.GMAIL_APPS_SCRIPT_TOKEN)return {sent:false,reason:'gmail_relay_not_configured'};
+  try{
+    const r=await fetch(env.GMAIL_APPS_SCRIPT_URL,{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        token:env.GMAIL_APPS_SCRIPT_TOKEN,
+        students:[{email:to,subject,text,html}]
+      })
+    });
+    const d=await r.json().catch(()=>null);
+    if(r.ok&&d?.ok&&Number(d?.sentCount||0)>0)return {sent:true,provider:'gmail'};
+    console.error('GMAIL RELAY ERROR:',JSON.stringify(d||{}));
+    return {sent:false,reason:'gmail_send_failed'};
+  }catch(e){
+    console.error('GMAIL RELAY REQUEST ERROR:',e?.message||e);
+    return {sent:false,reason:'gmail_relay_unreachable'};
+  }
+}
+
+async function sendEmail(env,{to,subject,text,html}){
+  const gmail=await sendGmailRelayEmail(env,{to,subject,text,html});
+  if(gmail.sent)return gmail;
+
+  if(env.RESEND_API_KEY&&env.RESEND_FROM_EMAIL){
+    try{
+      const r=await fetch('https://api.resend.com/emails',{
+        method:'POST',
+        headers:{'Authorization':`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json'},
+        body:JSON.stringify({from:env.RESEND_FROM_EMAIL,to:[to],subject,html,text})
+      });
+      if(r.ok)return {sent:true,provider:'resend'};
+      console.error('RESEND EMAIL ERROR:',await r.text());
+    }catch(e){
+      console.error('RESEND REQUEST ERROR:',e?.message||e);
+    }
+  }
+  return {sent:false,reason:'email_not_configured_or_send_failed'};
+}
+
 async function sendCertificateEmail(env,{to,name,examTitle,certificateUrl,percentage,certificateId}){
-  if(!env.RESEND_API_KEY||!env.RESEND_FROM_EMAIL)return {sent:false,reason:'email_not_configured'};
   const html=`<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#171717"><h2>Ahmed Elsheshtawy</h2><p>Ahmed Finance · Exam Platform</p><hr><p>Dear ${clean(name,120)},</p><h1>Congratulations on passing!</h1><p>You successfully passed <strong>${clean(examTitle,200)}</strong> with a score of <strong>${Number(percentage).toFixed(1)}%</strong>.</p><p>Your certificate has been issued and is publicly verifiable.</p><p><a href="${certificateUrl}" style="display:inline-block;background:#f97316;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">View & Share Certificate</a></p><p>Certificate ID: ${certificateId}</p><p style="color:#666">You can share this certificate link with anyone who needs to verify your achievement.</p></div>`;
-  const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:env.RESEND_FROM_EMAIL,to:[to],subject:`Your certificate — ${examTitle}`,html})});
-  if(!r.ok){console.error('CERTIFICATE EMAIL ERROR:',await r.text());return {sent:false,reason:'email_send_failed'}}
-  return {sent:true};
+  const text=`Dear ${clean(name,120)},\n\nCongratulations! You passed ${clean(examTitle,200)} with ${Number(percentage).toFixed(1)}%.\n\nCertificate: ${certificateUrl}\nCertificate ID: ${certificateId}`;
+  return sendEmail(env,{to,subject:`Your certificate — ${examTitle}`,text,html});
+}
+
+async function sendStudentAccessEmail(env,{to,name,studentId,loginUrl}){
+  const safeName=clean(name,120),safeId=clean(studentId,40);
+  const html=`<div style="font-family:Arial,sans-serif;max-width:680px;margin:auto;color:#171717"><h2>Ahmed Elsheshtawy</h2><p>Ahmed Finance · Exam Platform</p><hr><p>Hello ${safeName},</p><h1>Your student access details</h1><p>Your Student ID is <strong>${safeId}</strong>.</p><p>You can sign in using your Student ID or your email address and your existing password.</p><p><a href="${loginUrl}" style="display:inline-block;background:#f97316;color:#fff;text-decoration:none;padding:13px 20px;border-radius:10px;font-weight:700">Open Student Portal</a></p><p style="color:#666">For security, your password is never included in email.</p></div>`;
+  const text=`Hello ${safeName},\n\nYour Student ID is ${safeId}.\nSign in using your Student ID or email and your existing password:\n${loginUrl}\n\nFor security, your password is never included in email.`;
+  return sendEmail(env,{to,subject:'Your Ahmed Finance student access',text,html});
 }
 async function ensureCertificate(env,request,resultId){
   const r=await env.DB.prepare(`
@@ -44,6 +90,8 @@ async function ensureCertificate(env,request,resultId){
       r.attempt_id,
       r.user_id,
       r.exam_id,
+      r.score,
+      r.total_points,
       r.percentage,
       r.passed,
       u.full_name,
@@ -111,7 +159,7 @@ async function ensureCertificate(env,request,resultId){
     String(r.attempt_id),
     String(r.user_id),
     String(r.exam_id),
-    0,
+    Number(r.score||0),
     Number(r.percentage),
     r.title,
     'Ahmed Elsheshtawy',
@@ -183,7 +231,24 @@ async function createSession(env,kind,id,request){
 async function logout(request,env){const sid=sessionId(request);if(sid)await env.DB.prepare('DELETE FROM sessions WHERE id=?').bind(sid).run();return new Response(null,{status:204,headers:{'set-cookie':clearCookie(SESSION_COOKIE)}})}
 function adminOnly(s){return adminSession(s)?null:bad('Admin authorization required',403)}
 
-async function certificateResponse(request,env,cid){const c=await env.DB.prepare(`SELECT c.certificate_id,c.issued_at,u.full_name,e.title,r.percentage FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE c.certificate_id=?`).bind(cid).first();if(!c)return bad('Certificate not found',404);return json({...c,certificateUrl:absoluteUrl(request,`/certificate/${cid}`,env)})}
+async function certificateResponse(request,env,cid){
+  const c=await env.DB.prepare(`
+    SELECT c.id,c.certificate_number,c.verification_token,c.issued_at,c.status,
+           c.percentage,c.title,c.issued_by,c.type,c.level,c.format,c.duration,
+           c.description,c.skills,u.full_name,u.email,e.title AS exam_title
+    FROM certificates c
+    JOIN users u ON u.id=c.user_id
+    JOIN exams e ON e.id=c.exam_id
+    WHERE c.id=? OR c.certificate_number=?
+    LIMIT 1
+  `).bind(cid,cid).first();
+  if(!c)return bad('Certificate not found',404);
+  return json({
+    ...c,
+    certificate_id:c.id,
+    certificateUrl:absoluteUrl(request,`/certificate/${c.id}`,env)
+  });
+}
 
 async function api(request,env){
   const url=new URL(request.url),p=url.pathname,m=request.method,s=await getSession(request,env);
@@ -377,6 +442,18 @@ if(m==='GET'&&p==='/api/certificates'){
       await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(id).run();
       return json({ok:true,message:'Student password updated. Existing student sessions were signed out.'});
     }
+    if(m==='POST'&&p.match(/^\/api\/admin\/students\/\d+\/send-access-email$/)){
+      const id=idNum(p.split('/')[4]);
+      if(!id)return bad('Invalid student');
+      const u=await env.DB.prepare('SELECT id,student_id,full_name,email,status FROM users WHERE id=?').bind(id).first();
+      if(!u)return bad('Student not found',404);
+      if(u.status!=='active')return bad('Only active students can receive access emails',400);
+      if(!emailOK(u.email))return bad('Student email is invalid',400);
+      const loginUrl=absoluteUrl(request,'/',env);
+      const mail=await sendStudentAccessEmail(env,{to:u.email,name:u.full_name,studentId:u.student_id,loginUrl});
+      if(!mail.sent)return bad('Email could not be sent. Configure Gmail relay or Resend first.',502);
+      return json({ok:true,provider:mail.provider||'email',message:'Student access email sent.'});
+    }
     if(m==='GET'&&p.match(/^\/api\/admin\/exams\/(\d+)\/?$/)){
       const id=idNum((p.match(/^\/api\/admin\/exams\/(\d+)/)||[])[1]);
       if(!id)return bad('Invalid exam');
@@ -414,7 +491,45 @@ if(m==='GET'&&p==='/api/certificates'){
     if(m==='GET'&&p==='/api/admin/results'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE u.student_id LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY r.created_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
     if(m==='GET'&&p==='/api/admin/results/stats'){const d=await env.DB.prepare('SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN passed=1 THEN 1 ELSE 0 END),0) passed,COALESCE(SUM(CASE WHEN passed=0 THEN 1 ELSE 0 END),0) failed,COALESCE(AVG(percentage),0) average,COALESCE(MAX(percentage),0) highest,COALESCE(MIN(percentage),0) lowest FROM results').first();return json({total:Number(d.total||0),passed:Number(d.passed||0),failed:Number(d.failed||0),average:Number(d.average||0),highest:Number(d.highest||0),lowest:Number(d.lowest||0),passRate:Number(d.total?100*d.passed/d.total:0)})}
     if(m==='GET'&&p.match(/^\/api\/admin\/results\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid result');const r=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,u.email,e.title,e.passing_percentage FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE r.id=?').bind(id).first();if(!r)return bad('Result not found',404);const answers=await env.DB.prepare('SELECT a.*,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_answer,q.points FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY q.sort_order,q.id').bind(r.attempt_id).all();return json({result:r,answers:answers.results||[]})}
-    if(m==='GET'&&p==='/api/admin/certificates'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare(`SELECT c.*,u.student_id,u.full_name,u.email,e.title,r.percentage FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE u.student_id LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY c.issued_at DESC`).bind(like,like,like,like).all();return json((rows.results||[]).map(x=>({...x,certificateUrl:absoluteUrl(request,`/certificate/${x.certificate_id}`,env)})))}
+    if(m==='GET'&&p==='/api/admin/certificates'){
+      const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;
+      const rows=await env.DB.prepare(`
+        SELECT c.*,u.student_id,u.full_name,u.email,e.title AS exam_title
+        FROM certificates c
+        JOIN users u ON u.id=c.user_id
+        JOIN exams e ON e.id=c.exam_id
+        WHERE u.student_id LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ?
+        ORDER BY c.issued_at DESC
+      `).bind(like,like,like,like).all();
+      return json((rows.results||[]).map(x=>({
+        ...x,
+        certificate_id:x.id,
+        title:x.title||x.exam_title,
+        certificateUrl:absoluteUrl(request,`/certificate/${x.id}`,env)
+      })));
+    }
+    if(m==='POST'&&p.match(/^\/api\/admin\/certificates\/[^/]+\/resend-email$/)){
+      const cid=p.split('/')[4];
+      const c=await env.DB.prepare(`
+        SELECT c.id,c.issued_at,c.percentage,c.status,c.title,c.certificate_number,
+               u.full_name,u.email,e.title AS exam_title
+        FROM certificates c
+        JOIN users u ON u.id=c.user_id
+        JOIN exams e ON e.id=c.exam_id
+        WHERE c.id=? OR c.certificate_number=?
+        LIMIT 1
+      `).bind(cid,cid).first();
+      if(!c)return bad('Certificate not found',404);
+      if(c.status!=='valid')return bad('Only valid certificates can be emailed',400);
+      if(!emailOK(c.email))return bad('Student email is invalid',400);
+      const certificateUrl=absoluteUrl(request,`/certificate/${c.id}`,env);
+      const mail=await sendCertificateEmail(env,{
+        to:c.email,name:c.full_name,examTitle:c.exam_title||c.title,
+        certificateUrl,percentage:c.percentage,certificateId:c.id
+      });
+      if(!mail.sent)return bad('Certificate email could not be sent. Configure Gmail relay or Resend first.',502);
+      return json({ok:true,provider:mail.provider||'email'});
+    }
     if(m==='GET'&&p==='/api/admin/admins'){if(s.role!=='super_admin')return bad('Super admin required',403);const rows=await env.DB.prepare('SELECT id,username,role,status,created_at FROM admin_users ORDER BY created_at DESC').all();return json(rows.results||[])}
     if(m==='POST'&&p==='/api/admin/admins'){if(s.role!=='super_admin')return bad('Super admin required',403);const b=await body(request),username=clean(b?.username,80).toLowerCase();if(!/^[a-z0-9._-]{3,80}$/.test(username)||!passwordOK(b?.password)||!['admin','super_admin'].includes(b?.role||'admin'))return bad('Invalid admin fields');const exists=await env.DB.prepare('SELECT id FROM admin_users WHERE username=?').bind(username).first();if(exists)return bad('Username already exists',409);const ph=await hashPassword(b.password);const r=await env.DB.prepare('INSERT INTO admin_users(username,password_hash,password_salt,role,status) VALUES(?,?,?,?,?)').bind(username,ph.hash,ph.salt,b.role,'active').run();return json({id:r.meta.last_row_id},201)}
     if(m==='PATCH'&&p.match(/^\/api\/admin\/admins\/\d+$/)){if(s.role!=='super_admin')return bad('Super admin required',403);const id=idNum(p.split('/')[4]),b=await body(request);if(!id||!['active','blocked'].includes(b?.status))return bad('Invalid status');await env.DB.prepare('UPDATE admin_users SET status=? WHERE id=?').bind(b.status,id).run();return json({ok:true})}
@@ -422,4 +537,17 @@ if(m==='GET'&&p==='/api/certificates'){
   return bad('Not found',404);
 }
 
-export default {async fetch(request,env){try{const url=new URL(request.url);const path=url.pathname;if(path.startsWith('/api/'))return api(request,env);const cm=path.match(/^\/certificate\/([A-Za-z0-9-]+)$/);if(request.method==='GET'&&cm){const c=await env.DB.prepare(`SELECT c.certificate_id,c.issued_at,u.full_name,e.title,r.percentage,r.score,r.total_points FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE c.certificate_id=?`).bind(cm[1]).first();if(!c)return new Response('Certificate not found',{status:404});return certificatePage({...c,url:absoluteUrl(request,`/certificate/${cm[1]}`,env)})}if(path==='/admin'||path==='/admin/')return env.ASSETS.fetch(new Request(new URL('/admin.html',request.url),request));return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({error:'Internal server error'},500)}}};
+export default {async fetch(request,env){try{const url=new URL(request.url);const path=url.pathname;if(path.startsWith('/api/'))return api(request,env);const cm=path.match(/^\/certificate\/([A-Za-z0-9-]+)$/);if(request.method==='GET'&&cm){
+      const c=await env.DB.prepare(`
+        SELECT c.id,c.certificate_number,c.issued_at,c.status,u.full_name,
+               e.title,r.percentage,r.score,r.total_points
+        FROM certificates c
+        JOIN users u ON u.id=c.user_id
+        JOIN exams e ON e.id=c.exam_id
+        JOIN results r ON r.attempt_id=c.attempt_id
+        WHERE c.id=? OR c.certificate_number=?
+        LIMIT 1
+      `).bind(cm[1],cm[1]).first();
+      if(!c)return new Response('Certificate not found',{status:404});
+      return certificatePage({...c,certificate_id:c.id,url:absoluteUrl(request,`/certificate/${c.id}`,env)});
+    }if(path==='/admin'||path==='/admin/')return env.ASSETS.fetch(new Request(new URL('/admin.html',request.url),request));return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({error:'Internal server error'},500)}}};

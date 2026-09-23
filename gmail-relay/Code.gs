@@ -24,10 +24,10 @@ function doPost(e) {
       try {
         MailApp.sendEmail({
           to: email,
-          subject: String(s.subject || 'Your Excam Student Account Details'),
+          subject: String(s.subject || 'Your Ahmed Finance Student Access'),
           body: String(s.text || ''),
           htmlBody: String(s.html || ''),
-          name: 'Excam'
+          name: 'Ahmed Finance'
         });
         sent.push({ email, sent: true });
       } catch (err) {
