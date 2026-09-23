@@ -23,6 +23,26 @@ function parseAttachments(value){
   try{return normalizeAttachments(JSON.parse(value||'[]'))}
   catch{return []}
 }
+function escapeHtml(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]))}
+function certificateNumber(){return `CERT-${new Date().getFullYear()}-${randomHex(5).slice(0,8).toUpperCase()}`}
+async function createCertificateAndNotify(request,env,{resultId,attemptId,userId,examId,score,totalPoints,percentage}){
+  const existing=await env.DB.prepare('SELECT * FROM certificates WHERE result_id=?').bind(resultId).first();
+  if(existing)return existing;
+  const token=randomHex(24),number=certificateNumber();
+  await env.DB.prepare(`INSERT INTO certificates(certificate_number,public_token,result_id,attempt_id,user_id,exam_id,issued_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(number,token,resultId,attemptId,userId,examId).run();
+  const cert=await env.DB.prepare(`SELECT c.*,u.full_name,u.email,u.student_id,e.title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.result_id=?`).bind(resultId).first();
+  if(env.GMAIL_APPS_SCRIPT_URL && env.GMAIL_APPS_SCRIPT_TOKEN && cert?.email){
+    try{
+      const certificateUrl=new URL(`/certificate/${encodeURIComponent(cert.public_token)}`,request.url).toString();
+      const resultUrl=new URL(`/certificate/${encodeURIComponent(cert.public_token)}/result`,request.url).toString();
+      const response=await fetch(env.GMAIL_APPS_SCRIPT_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:env.GMAIL_APPS_SCRIPT_TOKEN,students:[{email:cert.email,subject:`Your Excam Certificate – ${cert.title}`,text:`Congratulations ${cert.full_name}!\\n\\nYou passed ${cert.title} with ${Number(percentage).toFixed(1)}%.\\n\\nCertificate: ${certificateUrl}\\nDetailed result and answers: ${resultUrl}`,html:`<h2>Congratulations, ${escapeHtml(cert.full_name)}!</h2><p>You passed <b>${escapeHtml(cert.title)}</b> with a score of <b>${Number(percentage).toFixed(1)}%</b>.</p><p><a href="${certificateUrl}">View your certificate</a></p><p><a href="${resultUrl}">View your detailed result and answers</a></p>`,}]})});
+      const data=await response.json().catch(()=>({}));
+      if(response.ok && data?.ok){await env.DB.prepare('UPDATE certificates SET email_sent_at=CURRENT_TIMESTAMP,email_error=NULL WHERE id=?').bind(cert.id).run();cert.email_sent_at=new Date().toISOString();}
+      else {await env.DB.prepare('UPDATE certificates SET email_error=? WHERE id=?').bind(clean(data?.error||`Gmail relay HTTP ${response.status}`,1000),cert.id).run();}
+    }catch(e){await env.DB.prepare('UPDATE certificates SET email_error=? WHERE id=?').bind(clean(e?.message||e,1000),cert.id).run();}
+  }
+  return cert;
+}
 function idNum(v){const n=Number(v);return Number.isInteger(n)&&n>0?n:null}
 function passwordOK(v){return typeof v==='string'&&v.length>=8&&v.length<=128}
 function emailOK(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
@@ -173,8 +193,13 @@ async function api(request,env){
       await env.DB.prepare(`UPDATE exam_attempts SET status='submitted',submitted_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id).run();
 
       await env.DB.prepare(`INSERT INTO results(attempt_id,user_id,exam_id,score,total_points,percentage,passed) VALUES(?,?,?,?,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET score=excluded.score,total_points=excluded.total_points,percentage=excluded.percentage,passed=excluded.passed`).bind(id,s.user_id,a.exam_id,score,total,percentage,passed).run();
+      const resultRow=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
+      let certificate=null;
+      if(passed && resultRow?.id){
+        certificate=await createCertificateAndNotify(request,env,{resultId:resultRow.id,attemptId:id,userId:s.user_id,examId:a.exam_id,score,totalPoints:total,percentage});
+      }
 
-      return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString()}});
+      return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),resultId:resultRow?.id||null,certificate:certificate?{certificateNumber:certificate.certificate_number,url:`/certificate/${encodeURIComponent(certificate.public_token)}`,emailSent:!!certificate.email_sent_at}:null}});
     }catch(e){
       console.error('EXAM SUBMIT ERROR:',e?.message||e);
       return json({error:'Exam submission failed',details:String(e?.message||e)},500);
@@ -183,6 +208,37 @@ async function api(request,env){
 
   if(m==='GET'&&p==='/api/results'){
     if(!userSession(s))return bad('Unauthorized',401);const rows=await env.DB.prepare('SELECT r.*,e.title,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.user_id=? ORDER BY r.created_at DESC').bind(s.user_id).all();return json(rows.results||[]);
+  }
+  if(m==='GET'&&p.match(/^\/api\/results\/\d+$/)){
+    if(!userSession(s))return bad('Unauthorized',401);
+    const id=idNum(p.split('/')[3]);if(!id)return bad('Invalid result');
+    const r=await env.DB.prepare('SELECT r.*,e.title,e.passing_percentage FROM results r JOIN exams e ON e.id=r.exam_id WHERE r.id=? AND r.user_id=?').bind(id,s.user_id).first();
+    if(!r)return bad('Result not found',404);
+    const answers=await env.DB.prepare('SELECT a.*,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_answer,q.points FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY q.sort_order,q.id').bind(r.attempt_id).all();
+    return json({result:r,answers:answers.results||[]});
+  }
+  if(m==='GET'&&p.match(/^\/api\/certificates\/[^/]+$/)){
+    const token=decodeURIComponent(p.split('/')[3]||'');
+    if(!token)return bad('Certificate not found',404);
+    const c=await env.DB.prepare(`SELECT c.id,c.certificate_number,c.public_token,c.issued_at,c.email_sent_at,u.full_name,u.student_id,e.title,r.score,r.total_points,r.percentage,r.passed,r.id result_id FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id JOIN results r ON r.id=c.result_id WHERE c.public_token=? AND r.passed=1`).bind(token).first();
+    if(!c)return bad('Certificate not found',404);
+    return json({certificate:c,resultUrl:`/certificate/${encodeURIComponent(c.public_token)}/result`});
+  }
+  if(m==='GET'&&p.match(/^\/api\/certificates\/[^/]+\/result$/)){
+    const token=decodeURIComponent(p.split('/')[3]||'');
+    const c=await env.DB.prepare('SELECT result_id FROM certificates WHERE public_token=?').bind(token).first();
+    if(!c)return bad('Certificate not found',404);
+    const r=await env.DB.prepare('SELECT r.*,u.student_id,u.full_name,e.title,e.passing_percentage FROM results r JOIN users u ON u.id=r.user_id JOIN exams e ON e.id=r.exam_id WHERE r.id=? AND r.passed=1').bind(c.result_id).first();
+    if(!r)return bad('Result not found',404);
+    const answers=await env.DB.prepare('SELECT a.*,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.correct_answer,q.points FROM answers a JOIN questions q ON q.id=a.question_id WHERE a.attempt_id=? ORDER BY q.sort_order,q.id').bind(r.attempt_id).all();
+    return json({result:r,answers:answers.results||[]});
+  }
+  if(m==='POST'&&p==='/api/certificates/verify'){
+    const b=await body(request),number=clean(b?.certificateNumber,80).toUpperCase(),email=clean(b?.email,160).toLowerCase();
+    if(!number||!email||!emailOK(email))return bad('Certificate number and valid email are required');
+    const c=await env.DB.prepare('SELECT public_token FROM certificates c JOIN users u ON u.id=c.user_id JOIN results r ON r.id=c.result_id WHERE c.certificate_number=? AND lower(u.email)=? AND r.passed=1').bind(number,email).first();
+    if(!c)return bad('Certificate not found',404);
+    return json({ok:true,token:c.public_token,url:`/certificate/${encodeURIComponent(c.public_token)}`});
   }
 
   if(adminSession(s)){
@@ -260,4 +316,4 @@ async function api(request,env){
   return bad('Not found',404);
 }
 
-export default {async fetch(request,env){try{const url=new URL(request.url);const path=url.pathname;if(path.startsWith('/api/'))return api(request,env);if(path==='/admin'||path==='/admin/')return env.ASSETS.fetch(new Request(new URL('/admin.html',request.url),request));return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({error:'Internal server error'},500)}}};
+export default {async fetch(request,env){try{const url=new URL(request.url);const path=url.pathname;if(path.startsWith('/api/'))return api(request,env);if(path==='/admin'||path==='/admin/')return env.ASSETS.fetch(new Request(new URL('/admin.html',request.url),request));if(path==='/certificate'||path.startsWith('/certificate/'))return env.ASSETS.fetch(new Request(new URL('/index.html',request.url)));return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({error:'Internal server error'},500)}}};
