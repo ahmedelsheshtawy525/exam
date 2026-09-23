@@ -163,23 +163,3 @@ npm run deploy
 ## Important deployment step
 
 Do not commit the real D1 database ID or any bootstrap secret to a public repository if your repository is public. Use Wrangler secrets for sensitive values.
-
-
-## Email delivery
-
-The platform supports two server-side email providers:
-
-- **Gmail relay (recommended for a simple Gmail setup):** configure `GMAIL_APPS_SCRIPT_URL` and `GMAIL_APPS_SCRIPT_TOKEN`.
-- **Resend fallback:** configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL`.
-
-The worker tries the Gmail relay first and falls back to Resend if Gmail is unavailable.
-
-From the Admin portal you can:
-- send a student an access email containing their Student ID and portal link;
-- resend a certificate email.
-
-Passwords are never retrieved from the database or included in email.
-
-## Certificate portal
-
-Certificates use the current D1 schema (`certificates.id`, `certificate_number`, `attempt_id`, etc.). Public certificate pages are available at `/certificate/<certificate-id>`, and both the student portal and admin portal expose the public verification link.
