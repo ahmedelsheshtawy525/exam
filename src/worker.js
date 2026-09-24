@@ -140,6 +140,20 @@ async function api(request,env,ctx){
   const url=new URL(request.url),p=url.pathname,m=request.method,s=await getSession(request,env);
   if(!originOK(request))return bad('Invalid request origin',403);
 
+  if(m==='GET'&&p==='/api/public/certificate-verify'){
+    const number=clean(url.searchParams.get('id'),100).toUpperCase();
+    if(!number)return bad('Certificate ID is required',400);
+    const cert=await env.DB.prepare(`
+      SELECT c.certificate_number,c.status,c.title,c.type,c.level,c.format,c.duration,c.issued_at,
+             c.issued_by,u.full_name AS student_name,e.title AS exam_title
+      FROM certificates c
+      JOIN users u ON u.id=c.user_id
+      JOIN exams e ON e.id=c.exam_id
+      WHERE upper(c.certificate_number)=?
+    `).bind(number).first();
+    if(!cert)return bad('Certificate ID not found',404);
+    return json({verified:true,certificate:{id:cert.certificate_number,status:cert.status,title:cert.title,recipient:cert.student_name,issuedAt:cert.issued_at,issuedBy:cert.issued_by||'Ahmed Elsheshtawy',assessment:cert.exam_title,type:cert.type,level:cert.level,format:cert.format,duration:cert.duration}});
+  }
   if(m==='GET'&&p.match(/^\/api\/public\/certificate-exam\/[^/]+$/)){
     const number=decodeURIComponent(p.split('/')[4]||'');
     if(!number)return bad('Certificate not found',404);
