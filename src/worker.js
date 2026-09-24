@@ -321,7 +321,7 @@ async function api(request,env,ctx){
       if(passed && Number(a.certificate_enabled??1)===1){
         try{
           certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage});
-          if(certificate?.created){const emailTask=sendCertificateEmail(env,{to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage,issuedAt:certificate.issuedAt}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;}
+          if(certificate?.created){   const emailTask=sendCertificateEmail(env,{     to:s.email||a.email,     studentName:s.full_name||a.full_name,     certificateTitle:a.certificate_title||`${a.title} Certificate`,     examTitle:a.title,     verificationUrl:certificate.verificationUrl,     certificateNumber:certificate.certificateNumber,     percentage,     issuedAt:certificate.issuedAt   }).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));    await emailTask; }
         }catch(certError){
           certificateError=String(certError?.message||certError);
           console.error('CERTIFICATE ISSUE ERROR:',certificateError);
