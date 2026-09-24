@@ -59,6 +59,49 @@ async function renderDashboard(){
   </main>`);
 }
 
+function examCard(e){const files=Array.isArray(e.attachments)?e.attachments.length:0;const state=scheduleState(e);const scheduled=state==='scheduled';const schedule=scheduled?`<div class="exam-schedule scheduled"><b>Starts ${esc(fmtSchedule(e.available_from))}</b><span>Available for ${e.available_from&&e.expires_at?Math.max(1,Math.round((Date.parse(e.expires_at)-Date.parse(e.available_from))/3600000))+' hours':'a limited window'}</span></div>`:`<div class="exam-schedule"><b>Available now</b>${e.expires_at?`<span>Until ${esc(fmtSchedule(e.expires_at))}</span>`:'<span>No expiry set</span>'}</div>`;return `<article class="card exam-card ${scheduled?'is-scheduled':''}"><div class="exam-card-top"><span class="pill ${e.status==='active'?'active':''}">${scheduled?'Scheduled':e.status}</span>${Number(e.desktop_required)===1?'<span class="device-badge">Desktop required</span>':''}</div><h3>${esc(e.title)}</h3><p class="muted">${esc(e.description||'Finance assessment')}</p><div class="exam-meta"><span>${e.question_count} questions</span><span>·</span><span>${e.duration_minutes} min</span><span>·</span><span>Pass ${e.passing_percentage}%</span>${files?`<span>·</span><span>${files} file${files===1?'':'s'}</span>`:''}</div>${schedule}<button class="btn ${scheduled?'ghost':'orange'}" ${scheduled?'disabled':''} onclick="startExam(${e.id})">${scheduled?'Not open yet':'Start Exam ↗'}</button></article>`}
+async function startExam(id){
+  try{
+    clearInterval(state.timer);
+    state.submitting=false;
+    state.expired=false;
+    state.answers={};
+    state.questions=[];
+    state.currentQuestion=0;
+    state.reviewMode=false;
+    state.skippedQuestions=[];
+    const d=await api(`/api/exams/${id}/start`);
+    if(!d?.exam) throw new Error('Exam data could not be loaded');
+    if(!Array.isArray(d.questions)) throw new Error('Exam questions could not be loaded');
+    if(!d.attemptId) throw new Error('Exam attempt could not be created');
+    state.exam=d.exam;
+    state.questions=d.questions;
+    state.attemptId=d.attemptId;
+    state.startedAt=d.startedAt;
+    state.view='exam';
+    renderExam();
+    startTimer();
+  }catch(x){
+    console.error('START EXAM ERROR:',x);
+    if(x.message==='لا يمكن دخول الامتحان مرة أخرى لأنك اجتزت هذا الامتحان بالفعل.')showError('You have already passed this assessment and cannot take it again.','Assessment already passed');
+    else if(x.message==='This assessment must be taken on a desktop or laptop.')showError('This assessment must be taken on a desktop or laptop. Please switch to a supported device.','Desktop or laptop required');
+    else if(x.message==='This assessment is not open yet.')showError('This assessment is scheduled to open later. Check the start time and try again then.','Assessment not open yet');
+    else if(x.message==='This assessment is no longer available.')showError('The availability window for this assessment has ended.','Assessment no longer available');
+    else showError(x.message||'Unable to start exam','Unable to start assessment');
+  }
+}
+function examAnsweredCount(){return state.questions.filter(q=>state.answers[q.id]).length}
+function examUnanswered(){return state.questions.map((q,i)=>({q,i})).filter(x=>!state.answers[x.q.id])}
+function answerQuestion(questionId,answer){state.answers[questionId]=answer;state.skippedQuestions=state.skippedQuestions.filter(i=>state.questions[i]?.id!==questionId);renderExam()}
+function nextQuestion(){
+  const q=state.questions[state.currentQuestion];
+  if(q&&!state.answers[q.id])state.skippedQuestions=[...new Set([...state.skippedQuestions,state.currentQuestion])];
+  if(state.currentQuestion<state.questions.length-1){state.currentQuestion++;renderExam();return}
+  state.reviewMode=true;renderExam();
+}
+function previousQuestion(){if(state.currentQuestion>0){state.currentQuestion--;state.reviewMode=false;renderExam()}}
+function jumpToQuestion(index){if(index<0||index>=state.questions.length)return;state.currentQuestion=index;state.reviewMode=false;renderExam()}
+
 function renderExam(){
   if(Number(state.exam?.desktop_required)===1 && /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent||'')){showDesktopRequiredModal();return}
   const total=state.questions.length, answered=examAnsweredCount(), unanswered=examUnanswered();
