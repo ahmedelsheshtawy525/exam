@@ -102,3 +102,14 @@ body.dark-mode .btn.orange{background:#ff5a00;border-color:#ff5a00;color:#090909
 .answer-details>div{display:grid;gap:5px}
 .answer-details b{line-height:1.45}
 @media(max-width:720px){.answer-card-top{grid-template-columns:auto 1fr}.answer-card-top .pill{grid-column:2;justify-self:start}.answer-details{grid-template-columns:1fr}}
+
+/* Certificate workspace */
+.certificate-dashboard-grid{align-items:stretch}
+.student-certificate-card{padding:22px;display:flex;flex-direction:column;justify-content:space-between;gap:22px;border-color:#ded9ce;background:#fff}
+.student-certificate-card:hover{border-color:#ff4d00;box-shadow:0 16px 38px rgba(0,0,0,.08);transform:translateY(-2px);transition:.25s ease}
+.cert-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+.student-certificate-card h3{margin:5px 0 5px;font-size:22px}
+.student-certificate-card .actions{display:flex;gap:9px;flex-wrap:wrap}
+.review-intro{padding:24px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.review-intro h2{font-size:44px;line-height:1;margin:5px 0}
+@media(max-width:700px){.review-intro{flex-direction:column;align-items:flex-start}.student-certificate-card .actions .btn{width:100%;justify-content:center}.cert-card-top{flex-direction:column}}

@@ -163,3 +163,26 @@ npm run deploy
 ## Important deployment step
 
 Do not commit the real D1 database ID or any bootstrap secret to a public repository if your repository is public. Use Wrangler secrets for sensitive values.
+
+## Certificate / assessment review update
+
+- Student dashboard now has a dedicated **Certificates** area.
+- Each passed certificate has **View Certificate** and **View Exam** links.
+- **View Exam** opens a separate `/exam-review/:resultId` page containing the saved questions, the student's answers, the correct answers, correctness state, and points.
+- Public certificate verification pages were redesigned around the Ahmed Elsheshtawy black/off-white/orange visual identity.
+- Printing the certificate uses a clean certificate-only layout; dashboard/verification details are hidden from print.
+- The printed certificate includes a QR code that points to the public `/verify/:certificateNumber` URL.
+- Passing an exam still issues the certificate immediately. The worker also attempts to send the certificate email in the background.
+
+### Email configuration
+
+Email delivery uses Resend and is intentionally optional so certificate issuance is never blocked by email configuration.
+
+Configure these Cloudflare Worker secrets/vars:
+
+- `RESEND_API_KEY` — secret API key from Resend.
+- `EMAIL_FROM` — verified sender, for example `Ahmed Elsheshtawy <certificates@your-verified-domain.com>`.
+
+If these are not configured, the certificate is still issued normally; only the email is skipped.
+
+The email contains the student's name, exam, score, certificate ID, and a branded **View Certificate** button.
