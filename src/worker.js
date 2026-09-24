@@ -32,19 +32,78 @@ function isoOrNull(v){if(v===null||v===undefined||String(v).trim()==='')return n
 function availabilityState(startAt,expiresAt){const t=Date.now();const s=startAt?Date.parse(startAt):NaN,e=expiresAt?Date.parse(expiresAt):NaN;if(Number.isFinite(e)&&t>=e)return 'expired';if(Number.isFinite(s)&&t<s)return 'scheduled';return 'open'}
 function parseSkills(value){try{const a=Array.isArray(value)?value:JSON.parse(value||'[]');return a.map(x=>clean(x,80)).filter(Boolean).slice(0,30)}catch{return []}}
 function certificateNumber(){const d=new Date(),y=d.getUTCFullYear();return `CERT-${y}-${randomHex(5).slice(0,10).toUpperCase()}`}
-async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTitle,verificationUrl,certificateNumber,percentage}){
+async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTitle,verificationUrl,certificateNumber,percentage,issuedAt}){
   const apiKey=String(env.RESEND_API_KEY||'').trim();
   const from=String(env.EMAIL_FROM||'').trim();
   if(!apiKey||!from||!emailOK(to))return {sent:false,skipped:true,reason:'Email service is not configured'};
-  const emailOrigin=(()=>{try{return new URL(String(verificationUrl||'')).origin}catch{return String(env.APP_ORIGIN||'')}})();
+
+  const origin=(()=>{try{return new URL(String(verificationUrl||'')).origin}catch{return String(env.APP_ORIGIN||'')}})();
+  const no=encodeURIComponent(certificateNumber||'');
+  const certificateUrl=`${origin}/certificate/${no}`;
+  const verifyUrl=`${origin}/verify/${no}`;
   const safeName=htmlEscape(studentName||'Student');
-  const safeTitle=htmlEscape(certificateTitle||'Certificate');
-  const safeExam=htmlEscape(examTitle||'Assessment');
+  const safeTitle=htmlEscape(certificateTitle||examTitle||'Certificate');
+  const safeExam=htmlEscape(examTitle||certificateTitle||'Assessment');
   const safeNo=htmlEscape(certificateNumber||'');
-  const safeUrl=htmlEscape(verificationUrl||'');
-  const pct=Number(percentage||0).toFixed(1);
-  const html=`<!doctype html><html><body style="margin:0;background:#f4f2ec;font-family:Inter,Arial,sans-serif;color:#0a0a0a"><div style="max-width:680px;margin:0 auto;padding:28px 16px"><div style="background:#050505;border-radius:22px;padding:22px 26px;color:#fff"><div style="display:flex;align-items:center;gap:12px"><img src="${`${emailOrigin}/ae-logo.png`}" width="42" height="42" style="object-fit:contain" alt="AE"><div><div style="font-weight:800;font-size:16px">Ahmed Elsheshtawy</div><div style="color:#999;font-size:11px;letter-spacing:.12em;text-transform:uppercase">Finance · Assessment · Credentials</div></div></div><div style="height:1px;background:#292929;margin:22px 0"></div><div style="color:#ff4d00;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase">Certificate issued</div><h1 style="font-size:32px;line-height:1.05;margin:10px 0 18px;color:#fff">${safeTitle}</h1><p style="color:#bbb;margin:0 0 6px">Congratulations, <strong style="color:#fff">${safeName}</strong>.</p><p style="color:#999;line-height:1.6;margin:0">You successfully completed <strong style="color:#fff">${safeExam}</strong> with a score of <strong style="color:#fff">${pct}%</strong>.</p><div style="margin-top:24px"><a href="${safeUrl}" style="display:inline-block;background:#ff4d00;color:#050505;text-decoration:none;font-weight:800;padding:13px 18px;border-radius:10px">View Certificate ↗</a></div><div style="margin-top:20px;color:#777;font-size:11px">Certificate ID: ${safeNo}</div></div><div style="padding:22px 4px 0;color:#777;font-size:12px;line-height:1.6;text-align:center">This certificate can be verified online using its certificate link.</div><div style="margin-top:24px;border-top:1px solid #ddd8ce;padding:22px 8px 4px;text-align:center"><div style="font-family:'Amsterdam Four_ttf','Brush Script MT',cursive;font-weight:400;color:#111;font-size:24px;line-height:1.1">Ahmed Elsheshtawy</div><div style="color:#777;font-size:11px;margin-top:4px">Finance Assessment Platform · Financial Analysis · Financial Modeling</div><div style="margin-top:12px;font-size:11px"><span style="color:#777">Source:</span> <a href="https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/" style="color:#111;font-weight:700;text-decoration:none">Ahmed Portfolio ↗</a></div><div style="margin-top:12px;color:#999;font-size:10px">© ${new Date().getFullYear()} Ahmed Elsheshtawy. All rights reserved. · Built with intention.</div></div></div></body></html>`;
-  const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({from,to:[to],subject:`Your certificate is ready — ${certificateTitle||'Ahmed Finance Exam'}`,html})});
+  const safeCertificateUrl=htmlEscape(certificateUrl);
+  const safeVerifyUrl=htmlEscape(verifyUrl);
+  const dateValue=issuedAt||new Date().toISOString();
+  const issueDate=htmlEscape(new Date(String(dateValue).includes('T')?dateValue:dateValue+'Z').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}));
+
+  const html=`<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your certificate has been issued</title></head>
+<body style="margin:0;padding:0;background:#eeece6;font-family:Arial,Helvetica,sans-serif;color:#111111;">
+  <div style="width:100%;background:#eeece6;padding:32px 12px;box-sizing:border-box;">
+    <div style="max-width:680px;margin:0 auto;">
+      <div style="background:#050505;border-radius:22px 22px 0 0;padding:24px 28px;color:#fff;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td valign="middle" style="width:52px;"><img src="${htmlEscape(origin)}/ae-logo.png" width="44" height="44" alt="Ahmed Elsheshtawy" style="display:block;object-fit:contain;"></td>
+          <td valign="middle" style="padding-left:12px;"><div style="font-size:17px;font-weight:800;line-height:1.2;">Ahmed Elsheshtawy</div><div style="margin-top:4px;color:#a8a8a8;font-size:10px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;">Finance · Assessment · Credentials</div></td>
+        </tr></table>
+      </div>
+
+      <div style="background:#fbfaf6;border:1px solid #d8d3c8;border-top:0;padding:34px 28px 30px;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#ff4d00;">Certificate of Achievement</div>
+        <h1 style="margin:10px 0 14px;font-size:34px;line-height:1.08;letter-spacing:-.7px;color:#090909;">Congratulations, ${safeName}!</h1>
+        <p style="margin:0;color:#57534d;font-size:15px;line-height:1.65;">You successfully passed the assessment and your certificate has been officially issued by Ahmed Elsheshtawy.</p>
+
+        <div style="height:2px;background:#ff4d00;width:58px;margin:24px 0;"></div>
+
+        <div style="background:#f1eee7;border:1px solid #ddd8cd;border-radius:16px;padding:20px;">
+          <div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#817b72;margin-bottom:14px;">Certificate details</div>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;line-height:1.5;">
+            <tr><td style="padding:8px 0;color:#817b72;width:42%;">Student name</td><td style="padding:8px 0;font-weight:800;color:#111;">${safeName}</td></tr>
+            <tr><td style="padding:8px 0;color:#817b72;">Certificate</td><td style="padding:8px 0;font-weight:800;color:#111;">${safeTitle}</td></tr>
+            <tr><td style="padding:8px 0;color:#817b72;">Certificate ID</td><td style="padding:8px 0;font-weight:800;color:#111;word-break:break-word;">${safeNo}</td></tr>
+            <tr><td style="padding:8px 0;color:#817b72;">Issue date</td><td style="padding:8px 0;font-weight:800;color:#111;">${issueDate}</td></tr>
+          </table>
+        </div>
+
+        <div style="margin-top:24px;text-align:center;">
+          <a href="${safeCertificateUrl}" style="display:inline-block;background:#ff4d00;color:#050505;text-decoration:none;font-size:13px;font-weight:800;padding:14px 22px;border-radius:10px;margin:0 4px 10px;">View Certificate</a>
+          <a href="${safeVerifyUrl}" style="display:inline-block;background:#050505;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:14px 22px;border-radius:10px;margin:0 4px 10px;">Verify Certificate</a>
+        </div>
+
+        <div style="margin-top:20px;padding:16px 18px;background:#fff;border:1px solid #e0dbd0;border-radius:12px;">
+          <div style="font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#817b72;margin-bottom:7px;">Verification link</div>
+          <a href="${safeVerifyUrl}" style="font-size:12px;line-height:1.5;color:#111;text-decoration:none;word-break:break-all;">${safeVerifyUrl}</a>
+        </div>
+
+        <p style="margin:24px 0 0;text-align:center;color:#77736c;font-size:12px;line-height:1.6;">Keep your Certificate ID for future verification.</p>
+      </div>
+
+      <div style="background:#050505;border-radius:0 0 22px 22px;padding:24px 28px;text-align:center;color:#fff;">
+        <div style="font-size:15px;font-weight:800;">Ahmed Elsheshtawy</div>
+        <div style="margin-top:5px;color:#999;font-size:10px;letter-spacing:1.1px;text-transform:uppercase;">Finance · Assessment · Credentials</div>
+        <div style="margin-top:15px;color:#777;font-size:10px;line-height:1.6;">This email confirms that the certificate above was issued by the Ahmed Elsheshtawy Finance Assessment Platform.</div>
+        <div style="margin-top:12px;color:#666;font-size:10px;">© ${new Date().getFullYear()} Ahmed Elsheshtawy. All rights reserved.</div>
+      </div>
+    </div>
+  </div>
+</body></html>`;
+
+  const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({from,to:[to],subject:`Congratulations — Your ${certificateTitle||'Certificate'} Has Been Issued`,html})});
   if(!res.ok){const detail=await res.text().catch(()=> '');throw new Error(`Certificate email failed (${res.status}): ${detail.slice(0,500)}`)}
   return {sent:true};
 }
@@ -162,7 +221,7 @@ async function api(request,env,ctx){
     const qs=await env.DB.prepare(`SELECT q.id,q.question_text,q.option_a,q.option_b,q.option_c,q.option_d,q.points,q.sort_order${Number(cert.show_answers)===1?',q.correct_answer,a.selected_answer,a.is_correct,a.points_earned':''} FROM questions q ${Number(cert.show_answers)===1?'LEFT JOIN answers a ON a.question_id=q.id AND a.attempt_id=? ':''}WHERE q.exam_id=? ORDER BY q.sort_order,q.id`).bind(...(Number(cert.show_answers)===1?[String(cert.attempt_id),cert.exam_id]:[cert.exam_id])).all();
     return json({certificate:{certificateNumber:cert.certificate_number,status:cert.status,showAnswers:Number(cert.show_answers)===1,title:cert.title,studentName:cert.student_name,examTitle:cert.exam_title,score:Number(cert.score),percentage:Number(cert.percentage),issuedAt:cert.issued_at},exam:{title:cert.exam_title,description:cert.description,passingPercentage:Number(cert.passing_percentage),type:cert.certificate_type,level:cert.certificate_level,format:cert.certificate_format,duration:cert.certificate_duration,certificateDescription:cert.certificate_description,skills:parseSkills(cert.certificate_skills_json)},questions:qs.results||[]});
   }
-  if(m==='GET'&&p.match(/^\/verify\/[^/]+$/)){const number=decodeURIComponent(p.split('/')[2]||'');const c=number?await env.DB.prepare('SELECT c.*,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.certificate_number=?').bind(number).first():null;if(!c)return new Response('<h1>Certificate not found</h1>',{status:404,headers:{'content-type':'text/html; charset=utf-8'}});return new Response(credentialPage(c,request),{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=60'}})}
+  if(m==='GET'&&p.match(/^\/(?:verify|certificate)\/[^/]+$/)){const number=decodeURIComponent(p.split('/')[2]||'');const c=number?await env.DB.prepare('SELECT c.*,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.certificate_number=?').bind(number).first():null;if(!c)return new Response('<h1>Certificate not found</h1>',{status:404,headers:{'content-type':'text/html; charset=utf-8'}});return new Response(credentialPage(c,request),{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=60'}})}
   if(m==='POST'&&p==='/api/setup/admin'){
     const secret=request.headers.get('x-bootstrap-secret')||'';if(!env.ADMIN_BOOTSTRAP_SECRET||secret!==env.ADMIN_BOOTSTRAP_SECRET)return bad('Forbidden',403);
     const count=await env.DB.prepare('SELECT COUNT(*) c FROM admin_users').first();if(Number(count?.c||0)>0)return bad('Admin bootstrap is already locked',409);
@@ -369,7 +428,7 @@ async function api(request,env,ctx){
             total:Number(result.total_points),
             percentage:Number(result.percentage)
           });
-          if(certificate){const emailTask=sendCertificateEmail(env,{to:result.email||s.email,studentName:result.full_name||s.full_name,certificateTitle:result.certificate_title||`${result.title} Certificate`,examTitle:result.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage:Number(result.percentage)}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;}
+          if(certificate){const emailTask=sendCertificateEmail(env,{to:result.email||s.email,studentName:result.full_name||s.full_name,certificateTitle:result.certificate_title||`${result.title} Certificate`,examTitle:result.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage:Number(result.percentage),issuedAt:result.issued_at}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;}
         }catch(certError){
           console.error('CERTIFICATE RECOVERY ERROR:',certError?.message||certError);
           certificate=null;
