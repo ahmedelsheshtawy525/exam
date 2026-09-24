@@ -1,9 +1,8 @@
-FMVA Exam Platform v17
+FMVA Exam Platform v18
 
-This version continues from v16.
-Fixes:
-- Adds the public /verify/:certificateNumber route so issued certificates open correctly.
-- Keeps certificate verification public without login.
-- Fixes admin certificate detail/revoke/restore routes to support TEXT certificate IDs.
-
-Deploy this version after the v16 database migration is already applied.
+Changes in v18:
+- Reworked certificate details into a full-width balanced section with a right-side Source panel.
+- Removed repeated exam title from the certificate sentence.
+- Added issuer, assessment, verification and source information to the side panel.
+- Added the missing authenticated GET /api/results/:id endpoint for exam review.
+- After login, /exam-review/:id now returns directly to the requested review page.
