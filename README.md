@@ -176,19 +176,13 @@ Do not commit the real D1 database ID or any bootstrap secret to a public reposi
 
 ### Email configuration
 
-Email delivery uses a Google Apps Script Gmail relay.
+Email delivery uses Resend and is intentionally optional so certificate issuance is never blocked by email configuration.
 
-Configure these Cloudflare Worker secrets:
+Configure these Cloudflare Worker secrets/vars:
 
-- `GMAIL_APPS_SCRIPT_URL` — the current Google Apps Script Web App `/exec` URL.
-- `GMAIL_APPS_SCRIPT_TOKEN` — exactly the same private token configured in `gmail-relay/Code.gs`.
+- `RESEND_API_KEY` — secret API key from Resend.
+- `EMAIL_FROM` — verified sender, for example `Ahmed Elsheshtawy <certificates@your-verified-domain.com>`.
 
-The Apps Script Web App must be deployed as:
-- Execute as: **Me**
-- Who has access: **Anyone**
+If these are not configured, the certificate is still issued normally; only the email is skipped.
 
-Run `testAuthorization()` once in Apps Script and approve Gmail/Google permissions, then create a new Web App deployment version after any code change.
-
-The Worker records successful delivery in D1 (`email_sent_at`) and records failures in `email_error`. It retries certificates whose email was not successfully delivered, including certificates that existed before the relay was configured.
-
-Do not put the token in the Admin frontend, `public/`, or `wrangler.toml`.
+The email contains the student's name, exam, score, certificate ID, and a branded **View Certificate** button.

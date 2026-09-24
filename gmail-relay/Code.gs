@@ -2,12 +2,6 @@ const CONFIG = {
   TOKEN: 'CHANGE_ME_TO_A_LONG_RANDOM_TOKEN'
 };
 
-function testAuthorization() {
-  // Run this once manually in Apps Script and approve Gmail permission.
-  const quota = MailApp.getRemainingDailyQuota();
-  Logger.log('Gmail MailApp authorization is active. Remaining daily quota: ' + quota);
-}
-
 function doGet() {
   return ContentService
     .createTextOutput(JSON.stringify({ ok: true, service: 'Excam Gmail Relay' }))

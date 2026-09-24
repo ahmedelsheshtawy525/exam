@@ -65,47 +65,9 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   if(!res.ok||data?.ok===false)throw new Error(`Certificate email failed (${res.status}): ${String(data?.error||data?.message||'Gmail relay error').slice(0,500)}`);
   return {sent:true};
 }
-
-async function deliverCertificateEmailOnce(env,request,{certificate,to,studentName,certificateTitle,examTitle,percentage}){
-  if(!certificate?.certificateNumber) throw new Error('Certificate number is missing');
-  if(certificate.emailSentAt) return {sent:false,alreadySent:true};
-  try{
-    const result=await sendCertificateEmail(env,{
-      to,studentName,certificateTitle,examTitle,
-      verificationUrl:certificate.verificationUrl,
-      certificateNumber:certificate.certificateNumber,
-      percentage,issuedAt:certificate.issuedAt
-    });
-    if(result?.sent){
-      await env.DB.prepare('UPDATE certificates SET email_sent_at=CURRENT_TIMESTAMP,email_error=NULL WHERE attempt_id=?')
-        .bind(String(certificate.attemptId)).run();
-    }
-    return result;
-  }catch(err){
-    const message=String(err?.message||err).slice(0,1000);
-    try{
-      await env.DB.prepare('UPDATE certificates SET email_error=? WHERE attempt_id=?')
-        .bind(message,String(certificate.attemptId)).run();
-    }catch(updateErr){
-      console.error('CERTIFICATE EMAIL STATUS ERROR:',updateErr?.message||updateErr);
-    }
-    throw err;
-  }
-}
-
 async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,total,percentage}){
-  const existing=await env.DB.prepare('SELECT certificate_number,status,show_answers,issued_at,email_sent_at,email_error FROM certificates WHERE attempt_id=?').bind(String(attemptId)).first();
-  if(existing)return {
-    certificateNumber:existing.certificate_number,
-    verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existing.certificate_number)}`,
-    status:existing.status,
-    showAnswers:Number(existing.show_answers)===1,
-    issuedAt:existing.issued_at,
-    emailSentAt:existing.email_sent_at,
-    emailError:existing.email_error,
-    attemptId:String(attemptId),
-    created:false
-  };
+  const existing=await env.DB.prepare('SELECT certificate_number,status,show_answers FROM certificates WHERE attempt_id=?').bind(String(attemptId)).first();
+  if(existing)return {certificateNumber:existing.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existing.certificate_number)}`,status:existing.status,created:false};
   const u=await env.DB.prepare('SELECT full_name,email FROM users WHERE id=?').bind(userId).first();
   if(!u)throw new Error('Student account not found while issuing certificate');
   const certId=randomHex(16);
@@ -123,7 +85,7 @@ async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,to
       clean(a.certificate_duration||'',80),
       clean(a.certificate_description||a.description||'',10000),
       JSON.stringify(skills),issuedAt,'valid',0).run();
-  return {certificateNumber:certNo,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(certNo)}`,status:'valid',showAnswers:false,issuedAt,emailSentAt:null,emailError:null,attemptId:String(attemptId),created:true};
+  return {certificateNumber:certNo,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(certNo)}`,status:'valid',showAnswers:false,issuedAt,created:true};
 }
 function htmlEscape(v){return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;')}
 function credentialPage(c,request){
@@ -292,11 +254,7 @@ async function api(request,env,ctx){
           if(Number(existing.passed)===1 && Number(a.certificate_enabled??1)===1){
             try{
               certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:existing.exam_id,a,score:Number(existing.score),total:Number(existing.total_points),percentage:Number(existing.percentage)});
-             console.log("CERTIFICATE OBJECT RETRY:", JSON.stringify(certificate));
-              if(certificate){
-                const emailTask=deliverCertificateEmailOnce(env,request,{certificate,to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,percentage:Number(existing.percentage)}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));
-                if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;
-              }
+              if(certificate?.created){const emailTask=sendCertificateEmail(env,{to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage:Number(existing.percentage),issuedAt:certificate.issuedAt}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;}
             }catch(certError){
               certificateError=String(certError?.message||certError);
               console.error('CERTIFICATE ISSUE ERROR:',certificateError);
@@ -363,10 +321,7 @@ async function api(request,env,ctx){
       if(passed && Number(a.certificate_enabled??1)===1){
         try{
           certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage});
-          if(certificate){
-            const emailTask=deliverCertificateEmailOnce(env,request,{certificate,to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,percentage}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));
-            await emailTask;
-          }
+          if(certificate?.created){const emailTask=sendCertificateEmail(env,{to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage,issuedAt:certificate.issuedAt}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;}
         }catch(certError){
           certificateError=String(certError?.message||certError);
           console.error('CERTIFICATE ISSUE ERROR:',certificateError);
@@ -411,22 +366,15 @@ async function api(request,env,ctx){
     let certificate=null;
     if(Number(result.passed)===1){
       const existingCert=await env.DB.prepare(
-        'SELECT certificate_number,status,show_answers,issued_at,email_sent_at,email_error FROM certificates WHERE attempt_id=?'
+        'SELECT certificate_number,status,show_answers FROM certificates WHERE attempt_id=?'
       ).bind(String(result.attempt_id)).first();
       if(existingCert){
         certificate={
           certificateNumber:existingCert.certificate_number,
           verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existingCert.certificate_number)}`,
           status:existingCert.status,
-          showAnswers:Number(existingCert.show_answers)===1,
-          issuedAt:existingCert.issued_at,
-          emailSentAt:existingCert.email_sent_at,
-          emailError:existingCert.email_error,
-          attemptId:String(result.attempt_id),
-          created:false
+          showAnswers:Number(existingCert.show_answers)===1
         };
-        const emailTask=deliverCertificateEmailOnce(env,request,{certificate,to:result.email||s.email,studentName:result.full_name||s.full_name,certificateTitle:result.certificate_title||`${result.title} Certificate`,examTitle:result.title,percentage:Number(result.percentage)}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));
-        if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;
       }else{
         try{
           certificate=await ensureCertificate(env,request,{
@@ -438,10 +386,7 @@ async function api(request,env,ctx){
             total:Number(result.total_points),
             percentage:Number(result.percentage)
           });
-          if(certificate){
-              const emailTask=deliverCertificateEmailOnce(env,request,{certificate,to:result.email||s.email,studentName:result.full_name||s.full_name,certificateTitle:result.certificate_title||`${result.title} Certificate`,examTitle:result.title,percentage:Number(result.percentage)}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));
-              if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;
-            }
+          if(certificate?.created){const emailTask=sendCertificateEmail(env,{to:result.email||s.email,studentName:result.full_name||s.full_name,certificateTitle:result.certificate_title||`${result.title} Certificate`,examTitle:result.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage:Number(result.percentage),issuedAt:certificate.issuedAt||result.issued_at}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;}
         }catch(certError){
           console.error('CERTIFICATE RECOVERY ERROR:',certError?.message||certError);
           certificate=null;
