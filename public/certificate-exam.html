@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certificate Assessment — Ahmed Finance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f5f2eb;--surface:#fffdf9;--surface2:#f0ece4;--text:#171717;--muted:#6f6b63;--line:#ded8cc;--orange:#e7772d;--success:#28744d}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+body{padding:0 0 50px}.topbar{height:76px;border-bottom:1px solid var(--line);background:rgba(245,242,235,.96);display:flex;align-items:center;justify-content:space-between;padding:0 5vw;position:sticky;top:0;z-index:5}
+.brand{display:flex;gap:12px;align-items:center;font-weight:700}.brand img{width:38px;height:38px;object-fit:contain}.brand small{display:block;color:var(--muted);font-size:10px;font-weight:500;margin-top:2px}
+.actions{display:flex;gap:10px}.btn{border:1px solid var(--text);background:var(--text);color:#fff;border-radius:12px;padding:10px 14px;font-weight:700;text-decoration:none}.btn.ghost{background:transparent;color:var(--text);border-color:var(--line)}
+.page{width:min(980px,92vw);margin:0 auto;padding:45px 0}.header{margin-bottom:25px}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--orange);font-weight:800}.header h1{font-size:clamp(34px,5vw,58px);line-height:1;letter-spacing:-.055em;margin:10px 0}.muted{color:var(--muted);line-height:1.7}
+.notice{padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface2);margin-bottom:18px;font-size:12px}
+.stack{display:grid;gap:15px}.question{padding:23px;border:1px solid var(--line);border-radius:17px;background:var(--surface);box-shadow:0 10px 30px rgba(20,18,15,.04)}
+.qtop{display:grid;grid-template-columns:36px 1fr;gap:13px;align-items:start}.num{width:34px;height:34px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);display:grid;place-items:center;font-weight:800;font-size:12px}.qtext{font-size:16px;font-weight:750;line-height:1.6;padding-top:4px}
+.options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0 0 49px}.option{padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;line-height:1.55}.option b{color:var(--orange);margin-right:5px}
+.answer-note{margin:16px 0 0 49px;padding-top:13px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.empty{padding:35px;text-align:center;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.footer{max-width:980px;margin:35px auto 0;padding:35px 0 15px;border-top:1px solid var(--line)}
+.footer-main{display:flex;justify-content:space-between;align-items:flex-end;gap:25px}.footer-brand{display:flex;gap:12px;align-items:center}.footer-brand img{width:42px;height:42px;object-fit:contain}.footer-brand b{display:block}.footer-brand span{display:block;color:var(--muted);font-size:11px;margin-top:5px}.socials{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.socials a{width:38px;height:38px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;color:var(--orange);font-weight:800;text-decoration:none}.socials .portfolio{width:auto;border:0;border-radius:0;color:var(--text);margin-left:5px}.footer-bottom{display:flex;justify-content:space-between;gap:15px;margin-top:25px;padding-top:17px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
+.error{padding:20px;border:1px solid #efc8c3;background:#f9e9e7;color:#8f3028;border-radius:14px}
+@media(max-width:650px){.topbar{padding:0 4vw}.topbar .actions .ghost{display:none}.page{width:92vw;padding:32px 0}.options{grid-template-columns:1fr;margin-left:0}.answer-note{margin-left:0}.footer-main,.footer-bottom{flex-direction:column;align-items:flex-start}.socials{justify-content:flex-start}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="/ae-logo.png" alt="AE"><div>Ahmed Elsheshtawy<small>Ahmed Finance · EXAM PLATFORM</small></div></div>
+  <div class="actions"><a class="btn ghost" id="certificateLink" href="#">Certificate ↗</a><button class="btn" onclick="window.print()">Print</button></div>
+</header>
+<main class="page">
+  <section class="header">
+    <div class="eyebrow">Certificate assessment</div>
+    <h1 id="title">Loading assessment…</h1>
+    <p class="muted" id="subtitle">Loading the exam questions.</p>
+  </section>
+  <div id="content"></div>
+</main>
+<footer class="footer">
+  <div class="footer-main">
+    <div class="footer-brand"><img src="/ae-logo.png" alt="Ahmed Elsheshtawy"><div><b>Ahmed Elsheshtawy</b><span>Financial Analyst | Financial Modeling | FP&amp;A</span></div></div>
+    <div class="socials">
+      <a href="mailto:ahmedelsheshtawyofficial@gmail.com" title="Email">✉</a>
+      <a href="https://linkedin.com/in/ahmedelsheshtawyofficial/" target="_blank" rel="noopener" title="LinkedIn">in</a>
+      <a href="https://wa.me/+201559694529" target="_blank" rel="noopener" title="WhatsApp">◉</a>
+      <a href="https://www.facebook.com/ahmedelsheshtawyofficial" target="_blank" rel="noopener" title="Facebook">f</a>
+      <a class="portfolio" href="https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/" target="_blank" rel="noopener">Portfolio ↗</a>
+    </div>
+  </div>
+  <div class="footer-bottom"><span>© <span id="year"></span> Ahmed Elsheshtawy. All rights reserved.</span><span>Built with intention.</span></div>
+</footer>
+<script>
+const number=decodeURIComponent(location.pathname.split('/').filter(Boolean).pop()||'');
+const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+async function load(){
+  document.getElementById('year').textContent=new Date().getFullYear();
+  document.getElementById('certificateLink').href='/verify/'+encodeURIComponent(number);
+  if(!number){document.getElementById('content').innerHTML='<div class="error">Certificate not found.</div>';return}
+  try{
+    const r=await fetch('/api/public/certificate-exam/'+encodeURIComponent(number),{credentials:'omit'});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not load the assessment.');
+    const c=d.certificate||{},e=d.exam||{},qs=Array.isArray(d.questions)?d.questions:[];
+    document.getElementById('title').textContent=e.title||c.examTitle||'Assessment';
+    document.getElementById('subtitle').textContent=(e.description||'')+(e.passingPercentage!=null?' · Pass '+Number(e.passingPercentage).toFixed(0)+'%':'');
+    const note=c.showAnswers?'The submitted answers are visible because the learner enabled answer sharing.':'Questions are shown without requiring a student login. Submitted answers remain private.';
+    document.getElementById('content').innerHTML='<div class="notice">'+esc(note)+'</div><div class="stack">'+(qs.map((q,i)=>{
+      const options=['a','b','c','d'].map(k=>'<div class="option"><b>'+k.toUpperCase()+'.</b>'+esc(q['option_'+k]||'')+'</div>').join('');
+      let answer='';
+      if(c.showAnswers){
+        const selected=q.selected_answer||'No answer',correct=q.correct_answer||'';
+        answer='<div class="answer-note"><div><b>Your answer:</b> '+esc(selected)+'</div><div><b>Correct answer:</b> '+esc(correct)+'</div></div>';
+      }
+      return '<article class="question"><div class="qtop"><div class="num">'+(i+1)+'</div><div class="qtext">'+esc(q.question_text)+'</div></div><div class="options">'+options+'</div>'+answer+'</article>';
+    }).join('')||'<div class="empty">No questions are available for this assessment.</div>')+'</div>';
+  }catch(e){document.getElementById('content').innerHTML='<div class="error">'+esc(e.message||'Could not load the assessment.')+'</div>'}
+}
+load();
+</script>
+</body>
+</html>
