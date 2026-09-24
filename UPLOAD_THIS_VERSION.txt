@@ -1,13 +1,9 @@
-FMVA Exam Platform - Certificate FK Repair
+FMVA Exam Platform v17
 
-IMPORTANT: Apply the new D1 migration to the REMOTE database before/with deployment:
+This version continues from v16.
+Fixes:
+- Adds the public /verify/:certificateNumber route so issued certificates open correctly.
+- Keeps certificate verification public without login.
+- Fixes admin certificate detail/revoke/restore routes to support TEXT certificate IDs.
 
-npx wrangler d1 migrations apply ahmed-finance-exam-db --remote
-
-Then deploy:
-
-npx wrangler deploy
-
-This version repairs legacy certificate schemas that referenced the non-existent
-`attempts` table and prevents certificate issuance errors from turning a successful
-exam submission into HTTP 500.
+Deploy this version after the v16 database migration is already applied.
