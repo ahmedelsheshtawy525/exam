@@ -7,7 +7,7 @@ function showToast(msg){toast.textContent=msg;toast.classList.add('show');clearT
 function showError(msg,title='Something went wrong'){const existing=document.getElementById('error-modal');existing?.remove();const d=document.createElement('div');d.id='error-modal';d.className='modal-backdrop error-backdrop';d.innerHTML=`<div class="modal error-modal" role="alertdialog" aria-modal="true" aria-labelledby="error-title"><div class="error-icon" aria-hidden="true">!</div><div class="eyebrow">Error</div><h2 id="error-title">${esc(title)}</h2><p class="error-message">${esc(msg||'We could not complete this action. Please try again.')}</p><div class="error-actions"><button class="btn orange" onclick="closeError()">Close</button></div></div>`;document.body.appendChild(d);requestAnimationFrame(()=>d.classList.add('show'));d.addEventListener('click',e=>{if(e.target===d)closeError()});}
 function closeError(){document.getElementById('error-modal')?.remove()}
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeError()});
-window.addEventListener('error',e=>{e.preventDefault();showError('An unexpected error occurred. Please refresh the page and try again.','Unexpected error')});
+window.addEventListener('error',e=>{if(e.target&&e.target!==window&&!e.error)return;showError(e.message||'An unexpected error occurred. Please refresh the page and try again.','Unexpected error')});
 window.addEventListener('unhandledrejection',e=>{e.preventDefault();showError(e.reason?.message||'An unexpected error occurred. Please try again.','Unexpected error')});
 const translations={
   'Home':'الرئيسية','Exams':'الامتحانات','Results':'النتائج','Student Login':'دخول الطالب','Get started':'ابدأ الآن','Dashboard':'لوحة التحكم','Logout':'تسجيل الخروج',
