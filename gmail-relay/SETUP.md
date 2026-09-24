@@ -29,3 +29,21 @@ The Worker sends the certificate email automatically after a passing exam create
 ## 3. Behavior
 
 The Worker sends one certificate email when a certificate is newly created. Refreshing the result page will not send duplicate certificate emails.
+
+
+## Important after changing Code.gs
+
+After editing `Code.gs`, create a **new deployment version** (Deploy → Manage deployments → Edit → New version). The Cloudflare Worker must use the `/exec` URL of the current Web App deployment.
+
+Run `testAuthorization()` manually once from the Apps Script editor and approve Gmail/MailApp permissions.
+
+## Certificate email retry behavior
+
+The Worker stores `email_sent_at` and `email_error` in D1. A certificate is emailed only once after a successful send. If a previous attempt failed, opening the result again retries the delivery. Certificates created before email configuration can therefore be emailed after the relay is fixed.
+
+Apply the new D1 migration before deploying the Worker:
+
+```bash
+npx wrangler d1 migrations apply DB --remote
+npm run deploy
+```
