@@ -51,8 +51,10 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   }})();
 
   const no=encodeURIComponent(certificateNumber||'');
-  const certificateUrl=`${origin}/certificate/${no}`;
+  // The public certificate page in this project is /verify/{Certificate ID}.
+  // Keep one canonical URL so the email can never point to a different page.
   const verifyUrl=`${origin}/verify/${no}`;
+  const certificateUrl=verifyUrl;
   const logoUrl=`${origin}/ae-logo.png`;
   const safeName=htmlEscape(studentName||'Student');
   const safeTitle=htmlEscape(certificateTitle||examTitle||'Certificate');
@@ -164,7 +166,13 @@ async function deliverCertificateEmail(env,request,certificate,{to,studentName,c
   const attempts=Number(current?.email_attempts||0)+1;
   await env.DB.prepare("UPDATE certificates SET email_status='sending',email_attempts=?,email_error=NULL WHERE id=?").bind(attempts,id).run();
   try{
-    const result=await sendCertificateEmail(env,{to,studentName,certificateTitle,examTitle,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage,issuedAt:issuedAt||certificate.issuedAt});
+    // Always read the canonical certificate number from D1 immediately before sending.
+    // This prevents the email ID/link from ever drifting from the issued certificate.
+    const canonical=await env.DB.prepare('SELECT certificate_number,issued_at FROM certificates WHERE id=?').bind(id).first();
+    if(!canonical?.certificate_number)throw new Error('Certificate number not found');
+    const canonicalNumber=String(canonical.certificate_number);
+    const canonicalVerifyUrl=`${new URL(request.url).origin}/verify/${encodeURIComponent(canonicalNumber)}`;
+    const result=await sendCertificateEmail(env,{to,studentName,certificateTitle,examTitle,verificationUrl:canonicalVerifyUrl,certificateNumber:canonicalNumber,percentage,issuedAt:issuedAt||canonical.issued_at||certificate.issuedAt});
     if(result?.sent){
       const sentAt=new Date().toISOString();
       await env.DB.prepare("UPDATE certificates SET email_status='sent',email_sent_at=?,email_error=NULL,email_attempts=? WHERE id=?").bind(sentAt,attempts,id).run();
@@ -186,7 +194,7 @@ async function getCertificateForAttempt(env,attemptId){
 }
 
 async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,total,percentage}){
-  const existing=await env.DB.prepare('SELECT certificate_number,status,show_answers FROM certificates WHERE attempt_id=?').bind(String(attemptId)).first();
+  const existing=await env.DB.prepare('SELECT id,certificate_number,status,show_answers,issued_at,email_status FROM certificates WHERE attempt_id=?').bind(String(attemptId)).first();
   if(existing)return {id:existing.id,certificateNumber:existing.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existing.certificate_number)}`,status:existing.status,showAnswers:Number(existing.show_answers||0)===1,issuedAt:existing.issued_at,created:false,emailStatus:existing.email_status||'not_sent'};
   const u=await env.DB.prepare('SELECT full_name,email FROM users WHERE id=?').bind(userId).first();
   if(!u)throw new Error('Student account not found while issuing certificate');
