@@ -577,7 +577,7 @@ async function api(request,env,ctx){
       if(!c)return bad('Certificate not found',404);
       if(!emailOK(c.student_email))return bad('Student email is invalid or missing');
       const result=await deliverCertificateEmail(env,request,c,{to:c.student_email,studentName:c.student_name,certificateTitle:c.title||`${c.exam_title} Certificate`,examTitle:c.exam_title,percentage:Number(c.percentage||0),issuedAt:c.issued_at,force:true});
-      return json(result,result.sent?200:502);
+      return json({ok:!!result.sent,...result},200);
     }
     if(m==='POST'&&p==='/api/admin/certificates/send-pending'){
       const rows=await env.DB.prepare("SELECT c.*,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE COALESCE(c.email_status,'not_sent') IN ('not_sent','failed') ORDER BY c.issued_at ASC LIMIT 100").all();
