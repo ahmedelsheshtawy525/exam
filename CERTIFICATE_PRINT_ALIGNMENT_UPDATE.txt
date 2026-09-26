@@ -1,0 +1,6 @@
+Certificate print alignment update
+
+- Print layout now uses a certificate-shaped landscape page ratio matching the on-screen certificate instead of A4 landscape.
+- Desktop print signature keeps the requested 2 cm inward offset.
+- Desktop print certificate data keeps the requested 1 cm inward offset and 0.5 cm upward offset.
+- Mobile CSS/layout is unchanged.

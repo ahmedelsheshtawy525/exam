@@ -1,0 +1,4 @@
+Mobile certificate update:
+- Raised only the right-side certificate metadata block (Issue date, Certificate ID, VALID) by 0.5 cm (~19px).
+- No mobile dimensions, spacing, width, or other elements were changed.
+- Desktop and print rules remain unchanged.
