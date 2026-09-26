@@ -1,7 +1,5 @@
-Certificate alignment update — 2026-09-26
-
-Updated the certificate verification page:
-- Widened the desktop bottom certificate block so the signature / QR / metadata sit closer to the certificate edges while remaining inside the safe area.
-- Added mobile horizontal safe spacing around the bottom metadata block.
-- Reduced mobile bottom-grid crowding and added extra separation between the signature and Issue date / Certificate ID / VALID data.
-- No certificate content, QR URL, signature font, or other page sections were changed.
+Certificate visual update:
+- Bottom certificate metadata now aligns close to the certificate edges.
+- Signature stays on the opposite edge.
+- QR verification remains centered.
+- Mobile and print layouts keep the same visual hierarchy.
