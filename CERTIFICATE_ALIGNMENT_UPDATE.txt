@@ -1,0 +1,5 @@
+Certificate visual update:
+- Bottom certificate metadata now aligns close to the certificate edges.
+- Signature stays on the opposite edge.
+- QR verification remains centered.
+- Mobile and print layouts keep the same visual hierarchy.
