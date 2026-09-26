@@ -159,3 +159,60 @@ body.dark-mode .btn.orange{background:#ff5a00;border-color:#ff5a00;color:#090909
 .answer-option-key{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:11px;font-weight:800;background:var(--surface2);flex:0 0 24px}
 .answer-option-label{margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
 @media(max-width:620px){.answer-review-head{display:block}.answer-review-head .pill{margin-top:8px}.answer-review-meta{display:grid;gap:7px}}
+
+/* =========================
+   MOBILE UX POLISH
+   ========================= */
+@media(max-width:620px){
+  .topbar{padding:10px 4vw;gap:8px}
+  .brand{flex:1;min-width:0}
+  .brand-logo{width:36px;height:36px}
+  .brand-name{font-size:13px;overflow:hidden;text-overflow:ellipsis}
+  .brand-name small{font-size:7px;letter-spacing:.08em}
+  .top-actions{margin-left:auto;gap:6px;flex-shrink:0}
+  .top-actions>.btn.logout-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:36px;
+    padding:7px 10px;
+    border-radius:10px;
+    font-size:11px;
+  }
+  .top-actions>.btn.ghost{display:none}
+  .circle-btn{width:36px;height:36px}
+  .site-nav{padding-top:5px;padding-bottom:2px;gap:16px}
+  .site-nav button,.site-nav a{font-size:11px}
+  .student-dashboard{padding-top:24px}
+  .student-hero{gap:14px;margin-bottom:14px}
+  .student-hero h1{font-size:38px;line-height:1.02}
+  .student-id-card{border-radius:16px;padding:16px}
+  .student-stats{grid-template-columns:repeat(2,1fr);gap:9px;margin:16px 0 30px}
+  .student-stat{padding:15px;border-radius:15px}
+  .student-stat b{font-size:25px}
+  .student-stat span{font-size:9px}
+  .exam-card{padding:17px;border-radius:16px;min-height:0}
+  .exam-card h3{font-size:20px}
+  .exam-meta{gap:6px;font-size:11px}
+  .exam-card .btn{width:100%;min-height:44px}
+  .dashboard-section-head h2{font-size:22px}
+  .dashboard-section-head>span{font-size:11px}
+  .certificate-dashboard-grid .actions{display:grid;grid-template-columns:1fr}
+  .certificate-dashboard-grid .actions .btn{width:100%;text-align:center}
+  .result-header{display:block}
+  .result-header .result-status{display:inline-flex;margin-top:12px}
+  .result-hero{grid-template-columns:1fr!important;text-align:center;padding:20px!important}
+  .score-ring{margin:0 auto}
+  .result-actions{display:grid!important;grid-template-columns:1fr;gap:9px}
+  .result-actions .btn{width:100%;text-align:center}
+  .exam-top{gap:10px;padding:10px 0}
+  .exam-top h1{font-size:22px!important}
+  .exam-top .timer{font-size:17px}
+  .exam-question{min-height:0}
+  .question,.exam-question{padding:17px}
+  .option{padding:12px 11px;font-size:14px;line-height:1.5}
+  .exam-navigation{grid-template-columns:1fr 1fr;gap:8px}
+  .exam-nav-center{grid-column:1/-1;grid-row:1}
+  .exam-navigation .btn{min-height:42px}
+  .exam-footer-actions{display:grid;grid-template-columns:1fr}
+}
