@@ -172,7 +172,9 @@ Do not commit the real D1 database ID or any bootstrap secret to a public reposi
 - Public certificate verification pages were redesigned around the Ahmed Elsheshtawy black/off-white/orange visual identity.
 - Printing the certificate uses a clean certificate-only layout; dashboard/verification details are hidden from print.
 - The printed certificate includes a QR code that points to the public `/verify/:certificateNumber` URL.
-- Passing an exam still issues the certificate immediately. The worker also attempts to send the certificate email in the background.
+- Passing an exam still issues the certificate immediately and automatically sends the certificate email in the background.
+- Admin → Certificates can send/resend the email for any existing certificate, including certificates issued before this update.
+- Email delivery status and the last error are stored on each certificate so failed sends can be diagnosed and retried.
 
 ### Email configuration
 
@@ -183,6 +185,20 @@ Configure these Cloudflare Worker secrets/vars:
 - `RESEND_API_KEY` — secret API key from Resend.
 - `EMAIL_FROM` — verified sender, for example `Ahmed Elsheshtawy <certificates@your-verified-domain.com>`.
 
-If these are not configured, the certificate is still issued normally; only the email is skipped.
+If these are not configured, the certificate is still issued normally; the email is skipped and the reason is recorded on the certificate. The Worker derives the public verification URL from the current Worker origin, so an `APP_ORIGIN` variable is not required for normal deployment.
 
-The email contains the student's name, exam, score, certificate ID, and a branded **View Certificate** button.
+The email is a full congratulatory certificate notice containing the student's name, completed assessment, score, issue date, certificate ID, verification guidance, and a branded **View Your Certificate** button.
+
+
+## Gmail certificate email relay
+
+1. Open Google Apps Script and create/deploy a Web App using `gmail-relay-Code.gs`.
+2. Deploy as **Execute as: Me** and **Who has access: Anyone**. Use the `/exec` URL, not `/dev`.
+3. In Apps Script → Project Settings → Script Properties, add `GMAIL_RELAY_TOKEN` with the exact same value as the Cloudflare secret `GMAIL_APPS_SCRIPT_TOKEN`.
+4. In Cloudflare, set the Worker secrets: `GMAIL_APPS_SCRIPT_URL` and `GMAIL_APPS_SCRIPT_TOKEN`.
+5. Deploy the Worker.
+6. Run the included `testAuthorization()` in Apps Script once to confirm the relay token is configured.
+
+The Worker requires the relay response to contain JSON `{ "ok": true, "sent": 1 }`; an HTTP 200 by itself is not treated as a successful send.
+
+The admin Certificates screen supports **Send email / Resend email** for certificates that were already issued.

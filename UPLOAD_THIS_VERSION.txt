@@ -1,1 +1,8 @@
-V18 - fixed exam deletion with sequential dependency-safe D1 deletes and useful error reporting.
+FMVA Exam Platform v18
+
+Changes in v18:
+- Reworked certificate details into a full-width balanced section with a right-side Source panel.
+- Removed repeated exam title from the certificate sentence.
+- Added issuer, assessment, verification and source information to the side panel.
+- Added the missing authenticated GET /api/results/:id endpoint for exam review.
+- After login, /exam-review/:id now returns directly to the requested review page.
