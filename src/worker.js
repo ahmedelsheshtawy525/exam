@@ -70,9 +70,38 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   if(!res.ok||data?.ok===false)throw new Error(`Certificate email failed (${res.status}): ${String(data?.error||data?.message||'Gmail relay error').slice(0,500)}`);
   return {sent:true};
 }
+async function deliverCertificateEmail(env,request,certificate,{to,studentName,certificateTitle,examTitle,percentage,issuedAt,force=false}){
+  const id=String(certificate?.id||'');
+  if(!id) return {sent:false,error:'Certificate ID is missing'};
+  const current=await env.DB.prepare('SELECT email_status,email_attempts,email_sent_at FROM certificates WHERE id=?').bind(id).first();
+  if(!force && current?.email_status==='sent') return {sent:true,alreadySent:true,attempts:Number(current.email_attempts||0),sentAt:current.email_sent_at||null};
+  const attempts=Number(current?.email_attempts||0)+1;
+  await env.DB.prepare("UPDATE certificates SET email_status='sending',email_attempts=?,email_error=NULL WHERE id=?").bind(attempts,id).run();
+  try{
+    const result=await sendCertificateEmail(env,{to,studentName,certificateTitle,examTitle,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage,issuedAt:issuedAt||certificate.issuedAt});
+    if(result?.sent){
+      const sentAt=new Date().toISOString();
+      await env.DB.prepare("UPDATE certificates SET email_status='sent',email_sent_at=?,email_error=NULL,email_attempts=? WHERE id=?").bind(sentAt,attempts,id).run();
+      return {sent:true,attempts,sentAt};
+    }
+    const reason=String(result?.reason||'Certificate email was not sent').slice(0,1000);
+    await env.DB.prepare("UPDATE certificates SET email_status='failed',email_error=?,email_attempts=? WHERE id=?").bind(reason,attempts,id).run();
+    return {sent:false,error:reason,attempts};
+  }catch(e){
+    const error=String(e?.message||e||'Certificate email failed').slice(0,1000);
+    await env.DB.prepare("UPDATE certificates SET email_status='failed',email_error=?,email_attempts=? WHERE id=?").bind(error,attempts,id).run();
+    console.error('CERTIFICATE EMAIL ERROR',error);
+    return {sent:false,error,attempts};
+  }
+}
+
+async function getCertificateForAttempt(env,attemptId){
+  return await env.DB.prepare('SELECT * FROM certificates WHERE attempt_id=?').bind(String(attemptId)).first();
+}
+
 async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,total,percentage}){
   const existing=await env.DB.prepare('SELECT certificate_number,status,show_answers FROM certificates WHERE attempt_id=?').bind(String(attemptId)).first();
-  if(existing)return {certificateNumber:existing.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existing.certificate_number)}`,status:existing.status,created:false};
+  if(existing)return {id:existing.id,certificateNumber:existing.certificate_number,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(existing.certificate_number)}`,status:existing.status,showAnswers:Number(existing.show_answers||0)===1,issuedAt:existing.issued_at,created:false,emailStatus:existing.email_status||'not_sent'};
   const u=await env.DB.prepare('SELECT full_name,email FROM users WHERE id=?').bind(userId).first();
   if(!u)throw new Error('Student account not found while issuing certificate');
   const certId=randomHex(16);
@@ -80,7 +109,7 @@ async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,to
   const token=randomHex(24);
   const skills=parseSkills(a.certificate_skills_json);
   const issuedAt=new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO certificates(id,certificate_number,verification_token,attempt_id,user_id,exam_id,score,percentage,title,issued_by,type,level,format,duration,description,skills,issued_at,status,show_answers) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+  await env.DB.prepare(`INSERT INTO certificates(id,certificate_number,verification_token,attempt_id,user_id,exam_id,score,percentage,title,issued_by,type,level,format,duration,description,skills,issued_at,status,show_answers,email_status,email_attempts) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .bind(certId,certNo,token,String(attemptId),String(userId),String(examId),score,percentage,
       clean(a.certificate_title||`${a.title} Certificate`,200),
       clean(a.certificate_issued_by||'Ahmed Elsheshtawy',200),
@@ -89,8 +118,8 @@ async function ensureCertificate(env,request,{attemptId,userId,examId,a,score,to
       clean(a.certificate_format||'Online',80),
       clean(a.certificate_duration||'',80),
       clean(a.certificate_description||a.description||'',10000),
-      JSON.stringify(skills),issuedAt,'valid',0).run();
-  return {certificateNumber:certNo,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(certNo)}`,status:'valid',showAnswers:false,issuedAt,created:true};
+      JSON.stringify(skills),issuedAt,'valid',0,'not_sent',0).run();
+  return {id:certId,certificateNumber:certNo,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(certNo)}`,status:'valid',showAnswers:false,issuedAt,created:true,emailStatus:'not_sent'};
 }
 function htmlEscape(v){return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;').replaceAll("'",'&#39;')}
 function credentialPage(c,request){
@@ -271,7 +300,7 @@ async function api(request,env,ctx){
           if(Number(existing.passed)===1 && Number(a.certificate_enabled??1)===1){
             try{
               certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:existing.exam_id,a,score:Number(existing.score),total:Number(existing.total_points),percentage:Number(existing.percentage)});
-              if(certificate?.created){try{certificateEmail=await sendCertificateEmail(env,{to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage:Number(existing.percentage),issuedAt:certificate.issuedAt});}catch(emailError){certificateEmail={sent:false,error:String(emailError?.message||emailError)};console.error('CERTIFICATE EMAIL ERROR',emailError?.message||emailError);}}
+              if(certificate){const full=await getCertificateForAttempt(env,id);if(full)certificateEmail=await deliverCertificateEmail(env,request,full,{to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,percentage:Number(existing.percentage),issuedAt:certificate.issuedAt});}
             }catch(certError){
               certificateError=String(certError?.message||certError);
               console.error('CERTIFICATE ISSUE ERROR:',certificateError);
@@ -340,7 +369,7 @@ async function api(request,env,ctx){
       if(passed && Number(a.certificate_enabled??1)===1){
         try{
           certificate=await ensureCertificate(env,request,{attemptId:id,userId:s.user_id,examId:a.exam_id,a,score,total,percentage});
-          if(certificate?.created){try{certificateEmail=await sendCertificateEmail(env,{to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage,issuedAt:certificate.issuedAt});}catch(emailError){certificateEmail={sent:false,error:String(emailError?.message||emailError)};console.error('CERTIFICATE EMAIL ERROR',emailError?.message||emailError);}}
+          if(certificate){const full=await getCertificateForAttempt(env,id);if(full)certificateEmail=await deliverCertificateEmail(env,request,full,{to:s.email||a.email,studentName:s.full_name||a.full_name,certificateTitle:a.certificate_title||`${a.title} Certificate`,examTitle:a.title,percentage,issuedAt:certificate.issuedAt});}
         }catch(certError){
           certificateError=String(certError?.message||certError);
           console.error('CERTIFICATE ISSUE ERROR:',certificateError);
@@ -405,7 +434,7 @@ async function api(request,env,ctx){
             total:Number(result.total_points),
             percentage:Number(result.percentage)
           });
-          if(certificate?.created){const emailTask=sendCertificateEmail(env,{to:result.email||s.email,studentName:result.full_name||s.full_name,certificateTitle:result.certificate_title||`${result.title} Certificate`,examTitle:result.title,verificationUrl:certificate.verificationUrl,certificateNumber:certificate.certificateNumber,percentage:Number(result.percentage),issuedAt:certificate.issuedAt||result.issued_at}).catch(e=>console.error('CERTIFICATE EMAIL ERROR:',e?.message||e));if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;}
+          if(certificate){const full=await getCertificateForAttempt(env,result.attempt_id);if(full){const emailTask=deliverCertificateEmail(env,request,full,{to:result.email||s.email,studentName:result.full_name||s.full_name,certificateTitle:result.certificate_title||`${result.title} Certificate`,examTitle:result.title,percentage:Number(result.percentage),issuedAt:certificate.issuedAt||result.issued_at});if(ctx?.waitUntil)ctx.waitUntil(emailTask);else await emailTask;}}
         }catch(certError){
           console.error('CERTIFICATE RECOVERY ERROR:',certError?.message||certError);
           certificate=null;
@@ -542,6 +571,19 @@ async function api(request,env,ctx){
     if(m==='DELETE'&&p.match(/^\/api\/admin\/questions\/\d+$/)){const id=idNum(p.split('/')[4]);if(!id)return bad('Invalid question');await env.DB.prepare('DELETE FROM questions WHERE id=?').bind(id).run();return json({ok:true})}
     if(m==='GET'&&p==='/api/admin/certificates'){const q=clean(url.searchParams.get('q'),100),like=`%${q}%`;const rows=await env.DB.prepare('SELECT c.*,u.student_id,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.certificate_number LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR e.title LIKE ? ORDER BY c.issued_at DESC').bind(like,like,like,like).all();return json(rows.results||[])}
     if(m==='GET'&&p.match(/^\/api\/admin\/certificates\/[^/]+$/)){const id=clean(p.split('/')[4],100);if(!id)return bad('Invalid certificate');const c=await env.DB.prepare('SELECT c.*,u.student_id,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.id=?').bind(id).first();if(!c)return bad('Certificate not found',404);return json(c)}
+    if(m==='POST'&&p.match(/^\/api\/admin\/certificates\/[^/]+\/send-email$/)){
+      const id=clean(p.split('/')[4],100);if(!id)return bad('Invalid certificate');
+      const c=await env.DB.prepare('SELECT c.*,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE c.id=?').bind(id).first();
+      if(!c)return bad('Certificate not found',404);
+      if(!emailOK(c.student_email))return bad('Student email is invalid or missing');
+      const result=await deliverCertificateEmail(env,request,c,{to:c.student_email,studentName:c.student_name,certificateTitle:c.title||`${c.exam_title} Certificate`,examTitle:c.exam_title,percentage:Number(c.percentage||0),issuedAt:c.issued_at,force:true});
+      return json(result,result.sent?200:502);
+    }
+    if(m==='POST'&&p==='/api/admin/certificates/send-pending'){
+      const rows=await env.DB.prepare("SELECT c.*,u.full_name AS student_name,u.email AS student_email,e.title AS exam_title FROM certificates c JOIN users u ON u.id=c.user_id JOIN exams e ON e.id=c.exam_id WHERE COALESCE(c.email_status,'not_sent') IN ('not_sent','failed') ORDER BY c.issued_at ASC LIMIT 100").all();
+      const results=[];for(const c of (rows.results||[])){if(!emailOK(c.student_email)){results.push({id:c.id,sent:false,error:'Invalid or missing student email'});continue;}results.push({id:c.id,...await deliverCertificateEmail(env,request,c,{to:c.student_email,studentName:c.student_name,certificateTitle:c.title||`${c.exam_title} Certificate`,examTitle:c.exam_title,percentage:Number(c.percentage||0),issuedAt:c.issued_at})});}
+      return json({ok:true,total:results.length,sent:results.filter(x=>x.sent).length,failed:results.filter(x=>!x.sent).length,results});
+    }
     if(m==='POST'&&p.match(/^\/api\/admin\/certificates\/[^/]+\/revoke$/)){const id=clean(p.split('/')[4],100),b=await body(request);if(!id)return bad('Invalid certificate');await env.DB.prepare("UPDATE certificates SET status='revoked',revoked_at=CURRENT_TIMESTAMP,revocation_reason=? WHERE id=?").bind(clean(b?.reason,500),id).run();return json({ok:true})}
     if(m==='POST'&&p.match(/^\/api\/admin\/certificates\/[^/]+\/restore$/)){const id=clean(p.split('/')[4],100);if(!id)return bad('Invalid certificate');await env.DB.prepare("UPDATE certificates SET status='valid',revoked_at=NULL,revocation_reason=NULL WHERE id=?").bind(id).run();return json({ok:true})}
     if(m==='DELETE'&&p.match(/^\/api\/admin\/certificates\/[^/]+$/)){const id=clean(p.split('/')[4],100);if(!id)return bad('Invalid certificate');const c=await env.DB.prepare('SELECT id FROM certificates WHERE id=?').bind(id).first();if(!c)return bad('Certificate not found',404);await env.DB.prepare('DELETE FROM certificates WHERE id=?').bind(id).run();return json({ok:true})}
