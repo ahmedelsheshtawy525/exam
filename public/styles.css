@@ -119,3 +119,26 @@ body.dark-mode .btn.orange{background:#ff5a00;border-color:#ff5a00;color:#090909
 .certificate-visibility b{display:block;font-size:13px;margin-bottom:4px}.certificate-visibility small{display:block;color:var(--muted);line-height:1.45;font-size:11px}.certificate-visibility .btn{flex:0 0 auto}
 .public-question-card{padding:22px}.public-options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.public-option{padding:12px 14px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--surface,#fff);line-height:1.5}.public-option b{margin-right:5px}.public-question-card .answer-details{margin-top:16px}
 @media(max-width:700px){.certificate-visibility{align-items:flex-start;flex-direction:column}.certificate-visibility .btn{width:100%;justify-content:center}.public-options{grid-template-columns:1fr}}
+
+/* V13: Ahmed Elsheshtawy brand footer */
+.app-site-footer{max-width:1180px;margin:55px auto 0;padding:44px 0 22px;color:#8b8881;border-top:1px solid rgba(255,255,255,.12)}
+.app-footer-main{display:flex;align-items:flex-end;justify-content:space-between;gap:28px}
+.app-footer-brand{display:flex;align-items:center;gap:13px}
+.app-footer-brand img{width:42px;height:42px;object-fit:contain}
+.app-footer-brand b{display:block;color:var(--text);font-size:16px;letter-spacing:-.02em}
+.app-footer-brand span{display:block;margin-top:6px;font-size:12px;color:var(--muted)}
+.app-footer-socials{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.app-footer-socials>a:not(.app-footer-portfolio){width:42px;height:42px;border:1px solid rgba(255,255,255,.13);border-radius:50%;display:grid;place-items:center;text-decoration:none;color:var(--orange);font-weight:800;font-size:14px;transition:.18s ease}
+.app-footer-socials>a:not(.app-footer-portfolio):hover{border-color:var(--orange);transform:translateY(-2px)}
+.app-footer-portfolio{margin-left:8px;color:var(--text);font-weight:700;text-decoration:none;border-bottom:1px solid transparent;padding:10px 2px}
+.app-footer-portfolio:hover{color:var(--orange);border-color:var(--orange)}
+.app-footer-bottom{display:flex;justify-content:space-between;gap:20px;margin-top:32px;padding-top:22px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:var(--muted)}
+@media(max-width:700px){.app-footer-main{align-items:flex-start;flex-direction:column}.app-footer-socials{justify-content:flex-start}.app-footer-bottom{flex-direction:column;gap:7px}}
+
+
+/* Public certificate verification */
+.certificate-verifier{margin:28px auto 0;max-width:1180px;padding:28px;display:grid;grid-template-columns:1fr minmax(320px,480px);gap:28px;align-items:end}
+.verifier-copy h2{margin:7px 0 8px;font-size:30px;letter-spacing:-.04em}.verifier-copy p{margin:0;color:var(--muted);line-height:1.6;max-width:620px}
+.certificate-verify-form{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.certificate-verify-form .btn{height:47px;white-space:nowrap}.certificate-verify-result{grid-column:1/-1;border-top:1px solid var(--line);padding-top:22px;margin-top:2px}.verify-result-head{display:flex;align-items:center;justify-content:space-between;gap:16px}.verify-result-head h3{margin:5px 0 0;font-size:23px}.verify-result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.verify-result-grid>div{display:grid;gap:5px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface2)}.verify-result-grid span{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.verify-result-grid b{font-size:12px;line-height:1.45}.verify-confirmation{margin-top:12px;padding:13px 14px;border-radius:12px;background:#e8f3ed;border:1px solid #c9e4d4;color:var(--success);font-size:12px;line-height:1.55}.certificate-verify-result.is-error{padding:18px;border:1px solid #efc8c3;border-radius:14px;background:#f9e9e7}.certificate-verify-result.is-error h3{margin:5px 0 6px}.certificate-verify-result.is-error p{margin:0;color:var(--danger);font-size:12px}
+@media(max-width:760px){.certificate-verifier{grid-template-columns:1fr;padding:22px}.certificate-verify-form{grid-template-columns:1fr}.certificate-verify-form .btn{width:100%}.verify-result-grid{grid-template-columns:1fr 1fr}.verify-result-head{align-items:flex-start;flex-direction:column}}
+@media(max-width:480px){.verify-result-grid{grid-template-columns:1fr}}
