@@ -1,0 +1,10 @@
+EMAIL REDESIGN V33
+
+Changes from v32:
+- Removed the exclamation mark after the student name in the HTML hero and plain-text fallback.
+- Reworked footer social icon rendering for Gmail-safe image-only links.
+- Removed the horizontal divider directly below the social icons.
+- Increased icon hit area to 44x44 with 20x20 centered PNG icons.
+- Added stronger no-underline/no-border/no-baseline styling to linked icons.
+- Regenerated the social PNGs as clean white icons: Portfolio, LinkedIn, Facebook, WhatsApp, Email.
+- Kept all certificate data, certificate ID source, certificate URL, branding, and content logic unchanged.

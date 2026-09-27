@@ -1,1 +1,2 @@
-V24 - certificate route fix + Gmail relay diagnostics
+Upload this version to Cloudflare: Excam Certificate Email Redesign v33
+Only the email visual/footer/icon adjustments were changed from v32.

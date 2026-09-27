@@ -63,7 +63,7 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 
   // Gmail/Outlook are inconsistent with SVG. Keep social icons as hosted PNGs.
   const iconBase=`${origin}/email-icons`;
-  const social=(href,title,file)=>`<a href="${href}" target="_blank" rel="noopener" title="${title}" aria-label="${title}" style="display:block;width:40px;height:40px;line-height:0;font-size:0;text-align:center;border:1px solid #3b4148;border-radius:50%;background:#16191d;text-decoration:none!important;border-bottom:0!important;margin:0 6px;vertical-align:middle;"><img src="${iconBase}/${file}.png" width="20" height="20" alt="" aria-hidden="true" style="display:block;width:20px;height:20px;border:0;outline:none;text-decoration:none!important;margin:9px auto 0;"></a>`;
+  const social=(href,title,file)=>`<a href="${href}" target="_blank" rel="noopener" title="${title}" aria-label="${title}" style="display:inline-block;width:44px;height:44px;line-height:44px;font-size:0;text-align:center;border:1px solid #3b4148;border-radius:50%;background:#16191d;text-decoration:none!important;border-bottom:0!important;outline:none!important;vertical-align:middle;mso-line-height-rule:exactly;"><img src="${iconBase}/${file}.png" width="20" height="20" alt="${title}" aria-hidden="true" style="display:inline-block;width:20px;height:20px;border:0;outline:none;text-decoration:none!important;vertical-align:middle;margin:0;padding:0;line-height:20px;-ms-interpolation-mode:bicubic;"></a>`;
 
   const html=`<!doctype html>
 <html lang="en">
@@ -114,8 +114,8 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
     .footer-pad{padding-top:30px!important;padding-bottom:26px!important;}
     .footer-brand{text-align:center!important;}
     .footer-brand-table{margin:0 auto!important;}
-    .footer-social{display:block!important;width:100%!important;text-align:center!important;padding-top:24px!important;}
-    .footer-social a{margin:0 5px!important;text-decoration:none!important;border-bottom:0!important;}
+    .footer-social{display:block!important;width:100%!important;text-align:center!important;padding-top:28px!important;}
+    .footer-social a{margin:0!important;text-decoration:none!important;border-bottom:0!important;outline:none!important;}
     .footer-bottom{text-align:center!important;}
   }
 </style>
@@ -142,7 +142,7 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 <!-- HERO -->
 <tr><td class="mobile-pad hero-pad light-section" bgcolor="#ffffff" style="padding-top:40px;padding-bottom:30px;background:#ffffff!important;color:#171a1f;">
 <div style="font-size:11px;line-height:16px;letter-spacing:2.8px;font-weight:800;color:#d94f00;text-transform:uppercase;">Certificate Issued</div>
-<h1 class="hero-title" style="margin:14px 0 17px;font-size:42px;line-height:1.08;letter-spacing:-1.1px;font-weight:800;color:#171a1f;">Congratulations,<br><span style="color:#ed5600;">${safeName}!</span></h1>
+<h1 class="hero-title" style="margin:14px 0 17px;font-size:42px;line-height:1.08;letter-spacing:-1.1px;font-weight:800;color:#171a1f;">Congratulations,<br><span style="color:#ed5600;">${safeName}</span></h1>
 <p class="hero-copy" style="margin:0;max-width:520px;color:#616873;font-size:15px;line-height:1.72;">You have successfully passed the assessment and your certificate has been officially issued.</p>
 <div style="width:54px;height:3px;background:#ff5a00;margin-top:27px;"></div>
 </td></tr>
@@ -192,17 +192,17 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 </tr></table>
 </td>
 </tr>
-<tr><td class="footer-social" align="center" style="padding-top:24px;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;border-collapse:collapse;">
+<tr><td class="footer-social" align="center" style="padding-top:28px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;border-collapse:separate;border-spacing:0;">
 <tr>
-<td style="padding:0 4px;">${social('https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/','Portfolio','portfolio')}</td>
-<td style="padding:0 4px;">${social('https://linkedin.com/in/ahmedelsheshtawyofficial/','LinkedIn','linkedin')}</td>
-<td style="padding:0 4px;">${social('https://www.facebook.com/ahmedelsheshtawyofficial','Facebook','facebook')}</td>
-<td style="padding:0 4px;">${social('https://wa.me/+201559694529','WhatsApp','whatsapp')}</td>
-<td style="padding:0 4px;">${social('mailto:ahmedelsheshtawyofficial@gmail.com','Email','email')}</td>
+<td style="padding:0 7px;line-height:0;font-size:0;text-decoration:none;border:0;">${social('https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/','Portfolio','portfolio')}</td>
+<td style="padding:0 7px;line-height:0;font-size:0;text-decoration:none;border:0;">${social('https://linkedin.com/in/ahmedelsheshtawyofficial/','LinkedIn','linkedin')}</td>
+<td style="padding:0 7px;line-height:0;font-size:0;text-decoration:none;border:0;">${social('https://www.facebook.com/ahmedelsheshtawyofficial','Facebook','facebook')}</td>
+<td style="padding:0 7px;line-height:0;font-size:0;text-decoration:none;border:0;">${social('https://wa.me/+201559694529','WhatsApp','whatsapp')}</td>
+<td style="padding:0 7px;line-height:0;font-size:0;text-decoration:none;border:0;">${social('mailto:ahmedelsheshtawyofficial@gmail.com','Email','email')}</td>
 </tr></table>
 </td></tr>
-<tr><td class="footer-bottom" align="center" style="padding-top:22px;border-top:1px solid #2b2b2b;margin-top:22px;font-size:10px;line-height:16px;color:#858b91;">© ${year} Ahmed Elsheshtawy. All rights reserved.</td></tr>
+<tr><td class="footer-bottom" align="center" style="padding-top:28px;font-size:10px;line-height:16px;color:#858b91;">© ${year} Ahmed Elsheshtawy. All rights reserved.</td></tr>
 </table>
 </td></tr>
 
@@ -213,7 +213,7 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 </body>
 </html>`;
 
-  const text=`Congratulations, ${studentName||'Student'}!\n\nYou have successfully passed the assessment and your certificate has been officially issued.\n\nCertificate Name: ${certificateTitle||examTitle||'Certificate'}\nCertificate ID: ${certificateNumber||''}\nIssue Date: ${issueDate}\n\nView Certificate: ${certificateUrl}\n\nPortfolio: https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/\nLinkedIn: https://linkedin.com/in/ahmedelsheshtawyofficial/\nFacebook: https://www.facebook.com/ahmedelsheshtawyofficial\nWhatsApp: https://wa.me/+201559694529\nEmail: ahmedelsheshtawyofficial@gmail.com`;
+  const text=`Congratulations, ${studentName||'Student'}\n\nYou have successfully passed the assessment and your certificate has been officially issued.\n\nCertificate Name: ${certificateTitle||examTitle||'Certificate'}\nCertificate ID: ${certificateNumber||''}\nIssue Date: ${issueDate}\n\nView Certificate: ${certificateUrl}\n\nPortfolio: https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/\nLinkedIn: https://linkedin.com/in/ahmedelsheshtawyofficial/\nFacebook: https://www.facebook.com/ahmedelsheshtawyofficial\nWhatsApp: https://wa.me/+201559694529\nEmail: ahmedelsheshtawyofficial@gmail.com`;
 
   const res=await fetch(relayUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,students:[{email:to,name:studentName||'Student',subject:`Congratulations — Your ${certificateTitle||'Certificate'} Has Been Issued`,html,text}]})});
   const data=await res.json().catch(()=>({}));
