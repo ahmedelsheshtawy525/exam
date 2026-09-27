@@ -70,16 +70,22 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="color-scheme" content="light only">
+<meta name="color-scheme" content="light">
 <meta name="supported-color-schemes" content="light">
 <title>Your certificate has been issued</title>
 <style>
-  :root{color-scheme:light only!important;supported-color-schemes:light!important;}
-  html{background:#f3f1ec!important;color-scheme:light only!important;}
-  body{margin:0!important;padding:0!important;background:#f3f1ec!important;font-family:Arial,Helvetica,sans-serif;color:#171a1f;-webkit-text-size-adjust:100%;color-scheme:light only!important;}
+  :root{color-scheme:light!important;supported-color-schemes:light!important;}
+  html{background:#f3f1ec!important;color-scheme:light!important;}
+  body{margin:0!important;padding:0!important;background:#f3f1ec!important;font-family:Arial,Helvetica,sans-serif;color:#171a1f;-webkit-text-size-adjust:100%;color-scheme:light!important;}
   table{border-spacing:0!important;border-collapse:collapse!important;}
   img{border:0;display:block;line-height:100%;outline:none;text-decoration:none;}
   a{text-decoration:none;}
+  u + .email-body .email-shell, u + .email-body .email-card, u + .email-body .light-section, u + .email-body .details-box { background-color:#ffffff!important; color:#171a1f!important; }
+  u + .email-body .email-shell { background-color:#f3f1ec!important; }
+  u + .email-body .footer-pad { background-color:#070707!important; color:#ffffff!important; }
+  [data-ogsc] .light-section, [data-ogsc] .email-card, [data-ogsc] .details-box { background-color:#ffffff!important; color:#171a1f!important; }
+  [data-ogsc] .email-shell { background-color:#f3f1ec!important; }
+  [data-ogsc] .hero-title, [data-ogsc] .details-value { color:#171a1f!important; }
   .email-shell{width:100%;background:#f3f1ec!important;}
   .email-card{width:100%;max-width:620px;background:#ffffff!important;border:1px solid #e6e2dc;border-radius:18px;overflow:hidden;box-shadow:0 8px 28px rgba(18,24,32,.08);}
   .mobile-pad{padding-left:42px!important;padding-right:42px!important;}
@@ -89,12 +95,6 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   .details-row.last td{border-bottom:0;}
   .cta{background:#ff5a00;border-radius:12px;color:#ffffff!important;display:inline-block;font-size:15px;font-weight:800;line-height:22px;padding:16px 38px;box-shadow:0 6px 18px rgba(255,90,0,.20);}
   .id-value{font-family:"Courier New",Courier,monospace!important;letter-spacing:.55px!important;-webkit-user-select:text!important;user-select:text!important;cursor:text!important;color:#e94f00!important;}
-  @media (prefers-color-scheme:dark){
-    html,body,.email-shell{background:#f3f1ec!important;color:#171a1f!important;}
-    .email-card{background:#ffffff!important;}
-    .light-section{background:#ffffff!important;color:#171a1f!important;}
-    .details-box{background:#faf9f6!important;}
-  }
   @media screen and (max-width:600px){
     .outer-pad{padding:10px 6px!important;}
     .email-card{border-radius:14px!important;box-shadow:0 5px 18px rgba(18,24,32,.07)!important;}
@@ -120,8 +120,8 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   }
 </style>
 </head>
-<body bgcolor="#f3f1ec">
-<center class="email-shell" style="width:100%;background:#f3f1ec!important;">
+<body class="email-body" bgcolor="#f3f1ec" style="margin:0!important;padding:0!important;background-color:#f3f1ec!important;color:#171a1f!important;color-scheme:light!important;-webkit-text-size-adjust:100%;">
+<center class="email-shell" style="width:100%;background-color:#f3f1ec!important;color:#171a1f!important;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-shell" bgcolor="#f3f1ec" style="background:#f3f1ec!important;">
 <tr><td align="center" class="outer-pad" style="padding:22px 10px;background:#f3f1ec!important;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-card" bgcolor="#ffffff" style="background:#ffffff!important;">
