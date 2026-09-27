@@ -1,0 +1,1 @@
+V34 social icon refinement: replaced LinkedIn/Facebook/WhatsApp email PNGs with cleaner high-contrast marks, increased icon render size, and reinforced Gmail-safe no-underline/no-border link styling. No certificate data, URL, or email content logic changed.

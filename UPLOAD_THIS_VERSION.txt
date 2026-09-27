@@ -1,2 +1,5 @@
-Upload this version to Cloudflare: Excam Certificate Email Redesign v33
-Only the email visual/footer/icon adjustments were changed from v32.
+Excam Certificate Email Redesign v35
+
+This version keeps the v34 light email layout and content, but replaces the social icons with complete 44x44 PNG icon buttons. The entire button (circle + icon) is now one image inside the link, preventing Gmail desktop from rendering the icons incorrectly or showing link/baseline artifacts.
+
+Mobile layout is preserved; only the social icon implementation was changed.
