@@ -70,13 +70,20 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
 <title>Your certificate has been issued</title>
 <style>
-  :root{color-scheme:light!important;supported-color-schemes:light!important;}
-  html{background:#f3f1ec!important;color-scheme:light!important;}
-  body{margin:0!important;padding:0!important;background:#f3f1ec!important;font-family:Arial,Helvetica,sans-serif;color:#171a1f;-webkit-text-size-adjust:100%;color-scheme:light!important;}
+  :root{color-scheme:only light!important;supported-color-schemes:light!important;}
+  @media (prefers-color-scheme:dark){
+    html,body,.email-body,.email-shell{background-color:#f3f1ec!important;color:#171a1f!important;color-scheme:only light!important;}
+    .email-card,.light-section,.details-box{background-color:#ffffff!important;color:#171a1f!important;}
+    .details-box{background:#faf9f6!important;}
+    .hero-title,.details-value{color:#171a1f!important;}
+    .footer-pad{background-color:#070707!important;color:#ffffff!important;}
+  }
+  html{background:#f3f1ec!important;color-scheme:only light!important;}
+  body{margin:0!important;padding:0!important;background:#f3f1ec!important;font-family:Arial,Helvetica,sans-serif;color:#171a1f;-webkit-text-size-adjust:100%;color-scheme:only light!important;}
   table{border-spacing:0!important;border-collapse:collapse!important;}
   img{border:0;display:block;line-height:100%;outline:none;text-decoration:none;}
   a{text-decoration:none;}
@@ -86,6 +93,10 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   [data-ogsc] .light-section, [data-ogsc] .email-card, [data-ogsc] .details-box { background-color:#ffffff!important; color:#171a1f!important; }
   [data-ogsc] .email-shell { background-color:#f3f1ec!important; }
   [data-ogsc] .hero-title, [data-ogsc] .details-value { color:#171a1f!important; }
+  body[data-ogsc] .email-shell, body[data-ogsc] .email-card, body[data-ogsc] .light-section, body[data-ogsc] .details-box { background-color:#ffffff!important; color:#171a1f!important; }
+  body[data-ogsc] .email-shell { background-color:#f3f1ec!important; }
+  body[data-ogsc] .footer-pad { background-color:#070707!important; color:#ffffff!important; }
+  u + .email-body .hero-title, u + .email-body .details-value { color:#171a1f!important; }
   .email-shell{width:100%;background:#f3f1ec!important;}
   .email-card{width:100%;max-width:620px;background:#ffffff!important;border:1px solid #e6e2dc;border-radius:18px;overflow:hidden;box-shadow:0 8px 28px rgba(18,24,32,.08);}
   .mobile-pad{padding-left:42px!important;padding-right:42px!important;}
@@ -120,14 +131,14 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   }
 </style>
 </head>
-<body class="email-body" bgcolor="#f3f1ec" style="margin:0!important;padding:0!important;background-color:#f3f1ec!important;color:#171a1f!important;color-scheme:light!important;-webkit-text-size-adjust:100%;">
+<body class="email-body" bgcolor="#f3f1ec" style="margin:0!important;padding:0!important;background-color:#f3f1ec!important;color:#171a1f!important;color-scheme:only light!important;-webkit-text-size-adjust:100%;">
 <center class="email-shell" style="width:100%;background-color:#f3f1ec!important;color:#171a1f!important;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-shell" bgcolor="#f3f1ec" style="background:#f3f1ec!important;">
 <tr><td align="center" class="outer-pad" style="padding:22px 10px;background:#f3f1ec!important;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-card" bgcolor="#ffffff" style="background:#ffffff!important;">
 
 <!-- BRAND HEADER -->
-<tr><td class="mobile-pad header-pad" bgcolor="#070707" style="padding-top:27px;padding-bottom:27px;background:#070707!important;border-bottom:3px solid #ff5a00;">
+<tr><td class="mobile-pad header-pad" bgcolor="#070707" style="padding-top:27px;padding-bottom:27px;background:#070707!important;background-image:linear-gradient(#070707,#070707)!important;border-bottom:3px solid #ff5a00;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td width="72" valign="middle"><img class="logo-main" src="${safeLogoUrl}" width="64" height="64" alt="Ahmed Elsheshtawy" style="width:64px;height:64px;object-fit:contain;"></td>
@@ -140,7 +151,7 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 </td></tr>
 
 <!-- HERO -->
-<tr><td class="mobile-pad hero-pad light-section" bgcolor="#ffffff" style="padding-top:40px;padding-bottom:30px;background:#ffffff!important;color:#171a1f;">
+<tr><td class="mobile-pad hero-pad light-section" bgcolor="#ffffff" style="padding-top:40px;padding-bottom:30px;background:#ffffff!important;background-image:linear-gradient(#ffffff,#ffffff)!important;color:#171a1f;">
 <div style="font-size:11px;line-height:16px;letter-spacing:2.8px;font-weight:800;color:#d94f00;text-transform:uppercase;">Certificate Issued</div>
 <h1 class="hero-title" style="margin:14px 0 17px;font-size:42px;line-height:1.08;letter-spacing:-1.1px;font-weight:800;color:#171a1f;">Congratulations,<br><span style="color:#ed5600;">${safeName}</span></h1>
 <p class="hero-copy" style="margin:0;max-width:520px;color:#616873;font-size:15px;line-height:1.72;">You have successfully passed the assessment and your certificate has been officially issued.</p>
@@ -149,7 +160,7 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 
 <!-- CERTIFICATE DETAILS -->
 <tr><td class="mobile-pad details-pad light-section" bgcolor="#ffffff" style="padding-bottom:30px;background:#ffffff!important;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="details-box" bgcolor="#faf9f6" style="background:#faf9f6!important;border:1px solid #dedbd4;border-radius:14px;overflow:hidden;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="details-box" bgcolor="#faf9f6" style="background:#faf9f6!important;background-image:linear-gradient(#faf9f6,#faf9f6)!important;border:1px solid #dedbd4;border-radius:14px;overflow:hidden;">
 <tr><td style="padding:20px 22px 14px;border-bottom:1px solid #e2ded7;">
 <div style="font-size:11px;line-height:16px;letter-spacing:2px;font-weight:800;color:#707780;text-transform:uppercase;">Certificate Details</div>
 <div style="width:42px;height:3px;background:#ff5a00;margin-top:10px;"></div>
@@ -179,7 +190,7 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 </td></tr>
 
 <!-- FOOTER -->
-<tr><td class="mobile-pad footer-pad" bgcolor="#070707" style="padding-top:30px;padding-bottom:26px;background:#070707!important;border-top:1px solid #181818;">
+<tr><td class="mobile-pad footer-pad" bgcolor="#070707" style="padding-top:30px;padding-bottom:26px;background:#070707!important;background-image:linear-gradient(#070707,#070707)!important;border-top:1px solid #181818;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td class="footer-brand" align="center">
