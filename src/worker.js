@@ -61,139 +61,148 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   const issueDate=htmlEscape(new Date(String(dateValue).includes('T')?dateValue:dateValue+'Z').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}));
   const year=new Date(String(dateValue).includes('T')?dateValue:dateValue+'Z').getUTCFullYear();
 
-  // Gmail/Outlook are inconsistent with inline SVG. Use small hosted PNG icons instead.
+  // Gmail/Outlook are inconsistent with SVG. Keep social icons as hosted PNGs.
   const iconBase=`${origin}/email-icons`;
-  const social=(href,title,file)=>`<a href="${href}" target="_blank" rel="noopener" title="${title}" aria-label="${title}" style="display:block;width:40px;height:40px;line-height:0;font-size:0;text-align:center;border:1px solid #2a3541;border-radius:50%;background:#101720;text-decoration:none!important;border-bottom:0!important;margin:0 6px;vertical-align:middle;"><img src="${iconBase}/${file}.png" width="20" height="20" alt="" aria-hidden="true" style="display:block;width:20px;height:20px;border:0;outline:none;text-decoration:none!important;margin:9px auto 0;"></a>`;
+  const social=(href,title,file)=>`<a href="${href}" target="_blank" rel="noopener" title="${title}" aria-label="${title}" style="display:block;width:40px;height:40px;line-height:0;font-size:0;text-align:center;border:1px solid #3b4148;border-radius:50%;background:#16191d;text-decoration:none!important;border-bottom:0!important;margin:0 6px;vertical-align:middle;"><img src="${iconBase}/${file}.png" width="20" height="20" alt="" aria-hidden="true" style="display:block;width:20px;height:20px;border:0;outline:none;text-decoration:none!important;margin:9px auto 0;"></a>`;
 
   const html=`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light">
 <title>Your certificate has been issued</title>
 <style>
-  body{margin:0!important;padding:0!important;background:#05080c;font-family:Arial,Helvetica,sans-serif;color:#f5f7fa;-webkit-text-size-adjust:100%;}
+  :root{color-scheme:light only!important;supported-color-schemes:light!important;}
+  html{background:#f3f1ec!important;color-scheme:light only!important;}
+  body{margin:0!important;padding:0!important;background:#f3f1ec!important;font-family:Arial,Helvetica,sans-serif;color:#171a1f;-webkit-text-size-adjust:100%;color-scheme:light only!important;}
   table{border-spacing:0!important;border-collapse:collapse!important;}
   img{border:0;display:block;line-height:100%;outline:none;text-decoration:none;}
   a{text-decoration:none;}
-  .email-shell{width:100%;background:#05080c;}
-  .email-card{width:100%;max-width:620px;background:#0a0f15;border:1px solid #202b36;border-radius:18px;overflow:hidden;}
-  .mobile-pad{padding-left:38px!important;padding-right:38px!important;}
-  .details-row td{border-bottom:1px solid #26313d;}
+  .email-shell{width:100%;background:#f3f1ec!important;}
+  .email-card{width:100%;max-width:620px;background:#ffffff!important;border:1px solid #e6e2dc;border-radius:18px;overflow:hidden;box-shadow:0 8px 28px rgba(18,24,32,.08);}
+  .mobile-pad{padding-left:42px!important;padding-right:42px!important;}
+  .hero-title{font-size:42px;line-height:1.08;letter-spacing:-1.1px;}
+  .details-box{background:#faf9f6!important;border:1px solid #dedbd4!important;}
+  .details-row td{border-bottom:1px solid #e7e3dc;}
   .details-row.last td{border-bottom:0;}
-  .cta{background:#ff5a00;border-radius:12px;color:#fff!important;display:inline-block;font-size:15px;font-weight:800;line-height:20px;padding:16px 34px;box-shadow:0 5px 18px rgba(255,90,0,.18);}
-  .id-value{font-family:"Courier New",Courier,monospace!important;letter-spacing:.7px!important;-webkit-user-select:text!important;user-select:text!important;cursor:text!important;}
+  .cta{background:#ff5a00;border-radius:12px;color:#ffffff!important;display:inline-block;font-size:15px;font-weight:800;line-height:20px;padding:16px 38px;box-shadow:0 6px 18px rgba(255,90,0,.20);}
+  .id-value{font-family:"Courier New",Courier,monospace!important;letter-spacing:.55px!important;-webkit-user-select:text!important;user-select:text!important;cursor:text!important;color:#e94f00!important;}
+  @media (prefers-color-scheme:dark){
+    html,body,.email-shell{background:#f3f1ec!important;color:#171a1f!important;}
+    .email-card{background:#ffffff!important;}
+    .light-section{background:#ffffff!important;color:#171a1f!important;}
+    .details-box{background:#faf9f6!important;}
+  }
   @media screen and (max-width:600px){
-    .outer-pad{padding:8px 5px!important;}
-    .email-card{border-radius:13px!important;}
-    .mobile-pad{padding-left:20px!important;padding-right:20px!important;}
-    .header-pad{padding-top:22px!important;padding-bottom:22px!important;}
-    .logo-main{width:60px!important;height:60px!important;}
-    .brand-name{font-size:18px!important;line-height:22px!important;}
-    .hero-pad{padding-top:36px!important;padding-bottom:26px!important;}
-    .hero-title{font-size:31px!important;line-height:1.08!important;letter-spacing:-.8px!important;}
-    .hero-copy{font-size:14px!important;line-height:1.7!important;}
-    .details-pad{padding-bottom:25px!important;}
+    .outer-pad{padding:10px 6px!important;}
+    .email-card{border-radius:14px!important;box-shadow:0 5px 18px rgba(18,24,32,.07)!important;}
+    .mobile-pad{padding-left:22px!important;padding-right:22px!important;}
+    .header-pad{padding-top:26px!important;padding-bottom:26px!important;}
+    .logo-main{width:62px!important;height:62px!important;}
+    .brand-name{font-size:20px!important;line-height:23px!important;}
+    .hero-pad{padding-top:38px!important;padding-bottom:28px!important;}
+    .hero-title{font-size:34px!important;line-height:1.10!important;letter-spacing:-.7px!important;}
+    .hero-copy{font-size:15px!important;line-height:1.7!important;}
+    .details-pad{padding-bottom:28px!important;}
     .details-box{border-radius:14px!important;}
-    .details-value{font-size:15px!important;line-height:1.4!important;}
-    .certificate-name{font-size:15px!important;line-height:1.4!important;}
+    .details-value{font-size:15px!important;line-height:1.45!important;}
+    .certificate-name{font-size:15px!important;line-height:1.45!important;}
     .cta-wrap{padding-bottom:34px!important;}
-    .cta{display:block!important;text-align:center!important;padding:15px 18px!important;}
-    .footer-pad{padding-top:28px!important;padding-bottom:24px!important;}
+    .cta{display:block!important;text-align:center!important;padding:16px 18px!important;}
+    .footer-pad{padding-top:30px!important;padding-bottom:26px!important;}
     .footer-brand{text-align:center!important;}
     .footer-brand-table{margin:0 auto!important;}
-    .footer-social{display:block!important;width:100%!important;text-align:center!important;padding-top:22px!important;}
-    .footer-social a{margin:0 6px!important;text-decoration:none!important;border-bottom:0!important;}
+    .footer-social{display:block!important;width:100%!important;text-align:center!important;padding-top:24px!important;}
+    .footer-social a{margin:0 5px!important;text-decoration:none!important;border-bottom:0!important;}
     .footer-bottom{text-align:center!important;}
   }
 </style>
 </head>
-<body>
-<center class="email-shell">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-shell">
-<tr><td align="center" class="outer-pad" style="padding:22px 10px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-card">
+<body bgcolor="#f3f1ec">
+<center class="email-shell" style="width:100%;background:#f3f1ec!important;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-shell" bgcolor="#f3f1ec" style="background:#f3f1ec!important;">
+<tr><td align="center" class="outer-pad" style="padding:22px 10px;background:#f3f1ec!important;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-card" bgcolor="#ffffff" style="background:#ffffff!important;">
 
 <!-- BRAND HEADER -->
-<tr><td class="mobile-pad header-pad" style="padding-top:26px;padding-bottom:26px;background:#070b10;border-bottom:2px solid #ff5a00;">
+<tr><td class="mobile-pad header-pad" bgcolor="#070707" style="padding-top:27px;padding-bottom:27px;background:#070707!important;border-bottom:3px solid #ff5a00;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
-<td width="66" valign="middle"><img class="logo-main" src="${safeLogoUrl}" width="60" height="60" alt="Ahmed Elsheshtawy" style="width:60px;height:60px;object-fit:contain;"></td>
-<td valign="middle" style="padding-left:14px;">
-<div class="brand-name" style="font-size:20px;line-height:24px;font-weight:800;color:#ffffff;">Ahmed Elsheshtawy</div>
-<div style="margin-top:5px;font-size:9px;line-height:12px;letter-spacing:2px;font-weight:700;color:#aab4bf;">FINANCE · ANALYZE · GROW</div>
+<td width="72" valign="middle"><img class="logo-main" src="${safeLogoUrl}" width="64" height="64" alt="Ahmed Elsheshtawy" style="width:64px;height:64px;object-fit:contain;"></td>
+<td valign="middle" style="padding-left:15px;">
+<div class="brand-name" style="font-size:21px;line-height:25px;font-weight:800;color:#ffffff;">Ahmed Elsheshtawy</div>
+<div style="margin-top:6px;font-size:9px;line-height:12px;letter-spacing:2px;font-weight:700;color:#c6c9ce;">FINANCE · ANALYZE · GROW</div>
 </td>
 </tr>
 </table>
 </td></tr>
 
 <!-- HERO -->
-<tr><td class="mobile-pad hero-pad" style="padding-top:42px;padding-bottom:26px;background:#0a0f15;">
-<div style="font-size:11px;line-height:16px;letter-spacing:2.8px;font-weight:800;color:#ff6a16;text-transform:uppercase;">Certificate Issued</div>
-<h1 class="hero-title" style="margin:14px 0 16px;font-size:40px;line-height:1.1;letter-spacing:-1px;font-weight:800;color:#f7f9fb;">Congratulations,<br><span style="color:#ff6510;">${safeName}!</span></h1>
-<p class="hero-copy" style="margin:0;max-width:520px;color:#b9c2cc;font-size:15px;line-height:1.7;">You have successfully passed the assessment and your certificate has been officially issued.</p>
-<div style="width:48px;height:3px;background:#ff5a00;margin-top:25px;"></div>
+<tr><td class="mobile-pad hero-pad light-section" bgcolor="#ffffff" style="padding-top:40px;padding-bottom:30px;background:#ffffff!important;color:#171a1f;">
+<div style="font-size:11px;line-height:16px;letter-spacing:2.8px;font-weight:800;color:#d94f00;text-transform:uppercase;">Certificate Issued</div>
+<h1 class="hero-title" style="margin:14px 0 17px;font-size:42px;line-height:1.08;letter-spacing:-1.1px;font-weight:800;color:#171a1f;">Congratulations,<br><span style="color:#ed5600;">${safeName}!</span></h1>
+<p class="hero-copy" style="margin:0;max-width:520px;color:#616873;font-size:15px;line-height:1.72;">You have successfully passed the assessment and your certificate has been officially issued.</p>
+<div style="width:54px;height:3px;background:#ff5a00;margin-top:27px;"></div>
 </td></tr>
 
 <!-- CERTIFICATE DETAILS -->
-<tr><td class="mobile-pad details-pad" style="padding-bottom:28px;background:#0a0f15;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="details-box" style="background:#111821;border:1px solid #293642;border-radius:14px;overflow:hidden;">
-<tr><td style="padding:19px 20px 13px;border-bottom:1px solid #293642;">
-<div style="font-size:11px;line-height:16px;letter-spacing:2px;font-weight:800;color:#c7d0da;text-transform:uppercase;">Certificate Details</div>
+<tr><td class="mobile-pad details-pad light-section" bgcolor="#ffffff" style="padding-bottom:30px;background:#ffffff!important;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="details-box" bgcolor="#faf9f6" style="background:#faf9f6!important;border:1px solid #dedbd4;border-radius:14px;overflow:hidden;">
+<tr><td style="padding:20px 22px 14px;border-bottom:1px solid #e2ded7;">
+<div style="font-size:11px;line-height:16px;letter-spacing:2px;font-weight:800;color:#707780;text-transform:uppercase;">Certificate Details</div>
 <div style="width:42px;height:3px;background:#ff5a00;margin-top:10px;"></div>
 </td></tr>
-<tr class="details-row"><td style="padding:16px 20px;">
-<div style="font-size:9px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:#8290a0;font-weight:700;">Student Name</div>
-<div class="details-value" style="margin-top:5px;font-size:15px;line-height:22px;color:#f5f7fa;font-weight:800;">${safeName}</div>
+<tr class="details-row"><td style="padding:17px 22px 16px;">
+<div style="font-size:9px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:#858b93;font-weight:700;">Student Name</div>
+<div class="details-value" style="margin-top:5px;font-size:15px;line-height:22px;color:#171a1f;font-weight:800;">${safeName}</div>
 </td></tr>
-<tr class="details-row"><td style="padding:16px 20px;">
-<div style="font-size:9px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:#8290a0;font-weight:700;">Certificate Name</div>
-<div class="details-value certificate-name" style="margin-top:5px;font-size:15px;line-height:22px;color:#f5f7fa;font-weight:800;">${safeTitle}</div>
+<tr class="details-row"><td style="padding:17px 22px 16px;">
+<div style="font-size:9px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:#858b93;font-weight:700;">Certificate Name</div>
+<div class="details-value certificate-name" style="margin-top:5px;font-size:15px;line-height:22px;color:#171a1f;font-weight:800;">${safeTitle}</div>
 </td></tr>
-<tr class="details-row"><td style="padding:16px 20px;">
-<div style="font-size:9px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:#8290a0;font-weight:700;">Issue Date</div>
-<div class="details-value" style="margin-top:5px;font-size:15px;line-height:22px;color:#f5f7fa;font-weight:800;">${issueDate}</div>
+<tr class="details-row"><td style="padding:17px 22px 16px;">
+<div style="font-size:9px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:#858b93;font-weight:700;">Issue Date</div>
+<div class="details-value" style="margin-top:5px;font-size:15px;line-height:22px;color:#171a1f;font-weight:800;">${issueDate}</div>
 </td></tr>
-<tr class="details-row last"><td style="padding:16px 20px 19px;">
-<div style="font-size:9px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:#8290a0;font-weight:700;">Certificate ID</div>
-<div class="id-value" style="margin-top:6px;font-size:16px;line-height:23px;color:#ff6510;font-weight:900;word-break:break-word;">${safeNo}</div>
+<tr class="details-row last"><td style="padding:17px 22px 20px;">
+<div style="font-size:9px;line-height:14px;letter-spacing:1.5px;text-transform:uppercase;color:#858b93;font-weight:700;">Certificate ID</div>
+<div class="id-value" style="margin-top:7px;font-size:16px;line-height:23px;color:#e94f00;font-weight:900;word-break:break-word;">${safeNo}</div>
 </td></tr>
 </table>
 </td></tr>
 
 <!-- CTA -->
-<tr><td align="center" class="mobile-pad cta-wrap" style="padding-top:0;padding-bottom:38px;background:#0a0f15;">
+<tr><td align="center" class="mobile-pad cta-wrap light-section" bgcolor="#ffffff" style="padding-top:0;padding-bottom:38px;background:#ffffff!important;">
 <a href="${safeCertificateUrl}" target="_blank" rel="noopener" class="cta">View Certificate&nbsp;&nbsp; →</a>
-<div style="margin-top:12px;font-size:10px;line-height:16px;color:#74808d;">Open your certificate and verify its authenticity online.</div>
 </td></tr>
 
 <!-- FOOTER -->
-<tr><td class="mobile-pad footer-pad" style="padding-top:28px;padding-bottom:24px;background:#070b10;border-top:1px solid #202b36;">
+<tr><td class="mobile-pad footer-pad" bgcolor="#070707" style="padding-top:30px;padding-bottom:26px;background:#070707!important;border-top:1px solid #181818;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td class="footer-brand" align="center">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="footer-brand-table"><tr>
-<td width="44" valign="middle"><img src="${safeLogoUrl}" width="40" height="40" alt="AE" style="width:40px;height:40px;object-fit:contain;"></td>
+<td width="48" valign="middle"><img src="${safeLogoUrl}" width="42" height="42" alt="AE" style="width:42px;height:42px;object-fit:contain;"></td>
 <td valign="middle" style="padding-left:10px;text-align:left;">
 <div style="font-size:14px;line-height:18px;font-weight:800;color:#ffffff;">Ahmed Elsheshtawy</div>
-<div style="margin-top:3px;font-size:8px;line-height:11px;letter-spacing:1.5px;color:#87929e;">FINANCE · ANALYZE · GROW</div>
+<div style="margin-top:3px;font-size:8px;line-height:11px;letter-spacing:1.5px;color:#a4a9af;">FINANCE · ANALYZE · GROW</div>
 </td>
 </tr></table>
 </td>
 </tr>
-<tr><td class="footer-social" align="center" style="padding-top:20px;">
+<tr><td class="footer-social" align="center" style="padding-top:24px;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;border-collapse:collapse;">
 <tr>
-<td style="padding:0 3px;">${social('https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/','Portfolio','portfolio')}</td>
-<td style="padding:0 3px;">${social('https://linkedin.com/in/ahmedelsheshtawyofficial/','LinkedIn','linkedin')}</td>
-<td style="padding:0 3px;">${social('https://www.facebook.com/ahmedelsheshtawyofficial','Facebook','facebook')}</td>
-<td style="padding:0 3px;">${social('https://wa.me/+201559694529','WhatsApp','whatsapp')}</td>
-<td style="padding:0 3px;">${social('mailto:ahmedelsheshtawyofficial@gmail.com','Email','email')}</td>
+<td style="padding:0 4px;">${social('https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/','Portfolio','portfolio')}</td>
+<td style="padding:0 4px;">${social('https://linkedin.com/in/ahmedelsheshtawyofficial/','LinkedIn','linkedin')}</td>
+<td style="padding:0 4px;">${social('https://www.facebook.com/ahmedelsheshtawyofficial','Facebook','facebook')}</td>
+<td style="padding:0 4px;">${social('https://wa.me/+201559694529','WhatsApp','whatsapp')}</td>
+<td style="padding:0 4px;">${social('mailto:ahmedelsheshtawyofficial@gmail.com','Email','email')}</td>
 </tr></table>
 </td></tr>
-<tr><td class="footer-bottom" align="center" style="padding-top:22px;border-top:1px solid #202b36;margin-top:22px;font-size:10px;line-height:16px;color:#68737f;">© ${year} Ahmed Elsheshtawy. All rights reserved.</td></tr>
+<tr><td class="footer-bottom" align="center" style="padding-top:22px;border-top:1px solid #2b2b2b;margin-top:22px;font-size:10px;line-height:16px;color:#858b91;">© ${year} Ahmed Elsheshtawy. All rights reserved.</td></tr>
 </table>
 </td></tr>
 
