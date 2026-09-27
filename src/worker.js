@@ -61,8 +61,9 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   const issueDate=htmlEscape(new Date(String(dateValue).includes('T')?dateValue:dateValue+'Z').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}));
   const year=new Date(String(dateValue).includes('T')?dateValue:dateValue+'Z').getUTCFullYear();
 
-  const icon=(body)=>`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g stroke="#eaf0f6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</g></svg>`;
-  const social=(href,title,svg)=>`<a href="${href}" target="_blank" rel="noopener" title="${title}" aria-label="${title}" style="display:inline-block;width:38px;height:38px;line-height:38px;text-align:center;border:1px solid #2a3541;border-radius:50%;background:#101720;color:#f5f7fa;text-decoration:none;margin:0 4px;vertical-align:middle;">${svg}</a>`;
+  // Gmail/Outlook are inconsistent with inline SVG. Use small hosted PNG icons instead.
+  const iconBase=`${origin}/email-icons`;
+  const social=(href,title,file)=>`<a href="${href}" target="_blank" rel="noopener" title="${title}" aria-label="${title}" style="display:block;width:40px;height:40px;line-height:0;font-size:0;text-align:center;border:1px solid #2a3541;border-radius:50%;background:#101720;text-decoration:none!important;border-bottom:0!important;margin:0 6px;vertical-align:middle;"><img src="${iconBase}/${file}.png" width="20" height="20" alt="" aria-hidden="true" style="display:block;width:20px;height:20px;border:0;outline:none;text-decoration:none!important;margin:9px auto 0;"></a>`;
 
   const html=`<!doctype html>
 <html lang="en">
@@ -104,7 +105,7 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
     .footer-brand{text-align:center!important;}
     .footer-brand-table{margin:0 auto!important;}
     .footer-social{display:block!important;width:100%!important;text-align:center!important;padding-top:22px!important;}
-    .footer-social a{margin:0 5px!important;}
+    .footer-social a{margin:0 6px!important;text-decoration:none!important;border-bottom:0!important;}
     .footer-bottom{text-align:center!important;}
   }
 </style>
@@ -182,12 +183,15 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
 </tr></table>
 </td>
 </tr>
-<tr><td class="footer-social" align="center" style="padding-top:20px;white-space:nowrap;">
-${social('https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/','Portfolio',icon('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.2 2.4 3.2 5.2 3.2 8.5s-1 6.1-3.2 8.5c-2.2-2.4-3.2-5.2-3.2-8.5s1-6.1 3.2-8.5Z"/>'))}
-${social('https://linkedin.com/in/ahmedelsheshtawyofficial/','LinkedIn',icon('<path d="M6 9v9M6 6.2v.1M10.5 18v-5.2a3 3 0 0 1 6 0V18M10.5 10v8"/>'))}
-${social('https://www.facebook.com/ahmedelsheshtawyofficial','Facebook',icon('<path d="M14 20v-8h2.5l.4-3H14V7.3c0-.9.3-1.6 1.7-1.6h1.5V3c-.8-.1-1.5-.2-2.3-.2-2.6 0-4.2 1.6-4.2 4.4V9H8v3h2.7v8"/>'))}
-${social('https://wa.me/+201559694529','WhatsApp',icon('<path d="M20 11.5a8 8 0 0 1-11.8 7L4 20l1.5-4.1A8 8 0 1 1 20 11.5Z"/><path d="M9 8.5c.2 2 2 3.8 4 4 .6.1 1-.2 1.4-.8l.5-.8-1.7-.9-.6.7c-.8-.3-1.5-1-1.8-1.8l.7-.6-.9-1.7-.8.5c-.6.4-.9.8-.8 1.4Z"/>'))}
-${social('mailto:ahmedelsheshtawyofficial@gmail.com','Email',icon('<rect x="4" y="6" width="16" height="12" rx="2"/><path d="m5 8 7 5 7-5"/>'))}
+<tr><td class="footer-social" align="center" style="padding-top:20px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;border-collapse:collapse;">
+<tr>
+<td style="padding:0 3px;">${social('https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/','Portfolio','portfolio')}</td>
+<td style="padding:0 3px;">${social('https://linkedin.com/in/ahmedelsheshtawyofficial/','LinkedIn','linkedin')}</td>
+<td style="padding:0 3px;">${social('https://www.facebook.com/ahmedelsheshtawyofficial','Facebook','facebook')}</td>
+<td style="padding:0 3px;">${social('https://wa.me/+201559694529','WhatsApp','whatsapp')}</td>
+<td style="padding:0 3px;">${social('mailto:ahmedelsheshtawyofficial@gmail.com','Email','email')}</td>
+</tr></table>
 </td></tr>
 <tr><td class="footer-bottom" align="center" style="padding-top:22px;border-top:1px solid #202b36;margin-top:22px;font-size:10px;line-height:16px;color:#68737f;">© ${year} Ahmed Elsheshtawy. All rights reserved.</td></tr>
 </table>

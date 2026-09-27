@@ -1,0 +1,6 @@
+EMAIL REDESIGN V31
+- Removed link underline/baseline artifacts under footer social icons.
+- Reworked social icons as table cells for stable Gmail/mobile spacing.
+- Icons remain 40x40 with 20x20 PNG artwork, centered vertically.
+- Added explicit text-decoration:none!important and border-bottom:0!important.
+- Kept one icon per contact method; no duplicate text labels.
