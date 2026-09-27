@@ -1,0 +1,11 @@
+# Certificate Email Redesign V29
+
+Updated the certificate email based on mobile feedback:
+- Increased header logo size and spacing.
+- Reduced visual crowding in hero and certificate details.
+- Improved mobile-first spacing and typography.
+- Certificate ID uses selectable monospace text with explicit text-selection CSS.
+- Footer is spaced vertically and contains icon-only social links; duplicate text links removed.
+- Social icons use inline SVG so they remain visually consistent in Gmail.
+- Existing Portfolio, LinkedIn, Facebook, WhatsApp, and Email destinations are preserved.
+- Telegram was not invented/added because no Telegram URL exists in the project configuration.
