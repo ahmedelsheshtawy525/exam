@@ -65,71 +65,95 @@ async function sendCertificateEmail(env,{to,studentName,certificateTitle,examTit
   const dateValue=issuedAt||new Date().toISOString();
   const issueDate=htmlEscape(new Date(String(dateValue).includes('T')?dateValue:dateValue+'Z').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}));
 
-  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your certificate has been issued</title></head>
-<body style="margin:0;padding:0;background:#f1efe9;font-family:Arial,Helvetica,sans-serif;color:#111111;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f1efe9;"><tr><td align="center" style="padding:28px 12px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:700px;background:#ffffff;border:1px solid #dedbd3;border-radius:18px;overflow:hidden;">
+  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>Your certificate has been issued</title></head>
+<body style="margin:0;padding:0;background:#f4f3ef;font-family:Arial,Helvetica,sans-serif;color:#121212;-webkit-text-size-adjust:100%;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#f4f3ef;"><tr><td align="center" style="padding:28px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid #e3e0d9;">
 
-<tr><td style="background:#050505;padding:24px 28px;">
+<!-- Header -->
+<tr><td style="background:#0b0b0b;padding:26px 28px 24px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td valign="middle" style="width:54px;">
-<img src="${safeLogoUrl}" width="46" height="46" alt="Ahmed Elsheshtawy" style="display:block;width:46px;height:46px;object-fit:contain;border:0;">
+<img src="${safeLogoUrl}" width="46" height="46" alt="Ahmed Elsheshtawy" style="display:block;width:46px;height:46px;border:0;outline:none;text-decoration:none;object-fit:contain;">
 </td>
 <td valign="middle" style="padding-left:13px;">
-<div style="font-size:18px;font-weight:800;line-height:1.2;color:#ffffff;">Ahmed Elsheshtawy</div>
-<div style="margin-top:5px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#a7a7a7;">Finance · Assessment · Credentials</div>
+<div style="font-size:17px;line-height:22px;font-weight:800;color:#ffffff;">Ahmed Elsheshtawy</div>
+<div style="margin-top:4px;font-size:9px;line-height:14px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#9d9d9d;">Finance · Assessment · Credentials</div>
 </td>
+<td align="right" valign="middle" style="font-size:9px;line-height:14px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#ff5a13;">Official<br>Credential</td>
 </tr></table>
 </td></tr>
 
-<tr><td style="padding:36px 30px 30px;">
-<div style="font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#ff4d00;">Certificate of Achievement</div>
-<h1 style="margin:10px 0 12px;font-size:32px;line-height:1.12;color:#090909;">Congratulations, ${safeName}!</h1>
-<p style="margin:0;color:#5f5b54;font-size:15px;line-height:1.7;">You successfully passed the assessment. Your certificate has been officially issued by Ahmed Elsheshtawy.</p>
+<!-- Intro -->
+<tr><td style="padding:34px 30px 8px;">
+<div style="font-size:10px;line-height:15px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#ff4d00;">Certificate of Achievement</div>
+<h1 style="margin:9px 0 10px;font-size:30px;line-height:36px;font-weight:800;color:#111111;">Congratulations, ${safeName}!</h1>
+<p style="margin:0;max-width:540px;font-size:14px;line-height:23px;color:#5d5a54;">You successfully passed <strong style="color:#222;">${safeTitle}</strong>. Your official certificate has been issued and is ready to view.</p>
+</td></tr>
 
-<div style="height:3px;background:#ff4d00;width:58px;margin:24px 0 22px;"></div>
-
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f5f0;border:1px solid #dedad1;border-radius:14px;">
-<tr><td style="padding:20px 20px 8px;">
-<div style="font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#777169;margin-bottom:12px;">Certificate details</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:8px 0;color:#817b72;font-size:12px;width:38%;">Student name</td><td style="padding:8px 0;color:#111;font-size:13px;font-weight:800;">${safeName}</td></tr>
-<tr><td style="padding:8px 0;color:#817b72;font-size:12px;">Certificate</td><td style="padding:8px 0;color:#111;font-size:13px;font-weight:800;">${safeTitle}</td></tr>
-<tr><td style="padding:8px 0;color:#817b72;font-size:12px;">Certificate ID</td><td style="padding:8px 0;color:#111;font-size:15px;font-weight:900;letter-spacing:.6px;word-break:break-all;">${safeNo}</td></tr>
-<tr><td style="padding:8px 0 16px;color:#817b72;font-size:12px;">Issue date</td><td style="padding:8px 0 16px;color:#111;font-size:13px;font-weight:800;">${issueDate}</td></tr>
+<!-- Credential card -->
+<tr><td style="padding:22px 30px 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border:1px solid #dedbd4;background:#faf9f6;">
+<tr><td style="height:4px;background:#ff4d00;font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td style="padding:20px 20px 18px;">
+<div style="font-size:9px;line-height:14px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;color:#77736c;">Your credential</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:11px;">
+<tr><td valign="top" style="width:42%;padding:8px 8px 8px 0;font-size:11px;line-height:17px;color:#77736c;">Student</td><td valign="top" style="padding:8px 0;font-size:13px;line-height:18px;font-weight:800;color:#111;">${safeName}</td></tr>
+<tr><td valign="top" style="padding:8px 8px 8px 0;font-size:11px;line-height:17px;color:#77736c;border-top:1px solid #e8e5df;">Certificate</td><td valign="top" style="padding:8px 0;font-size:13px;line-height:18px;font-weight:800;color:#111;border-top:1px solid #e8e5df;">${safeTitle}</td></tr>
+<tr><td valign="top" style="padding:8px 8px 8px 0;font-size:11px;line-height:17px;color:#77736c;border-top:1px solid #e8e5df;">Issue date</td><td valign="top" style="padding:8px 0;font-size:13px;line-height:18px;font-weight:800;color:#111;border-top:1px solid #e8e5df;">${issueDate}</td></tr>
 </table>
-</td></tr></table>
 
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;"><tr>
-<td align="center" style="padding:0 4px 8px;">
-<a href="${safeCertificateUrl}" target="_blank" rel="noopener" style="display:inline-block;background:#ff4d00;color:#050505;text-decoration:none;font-size:13px;font-weight:800;padding:13px 20px;border-radius:9px;margin:0 4px 8px;">View Certificate ↗</a>
-<a href="${safeVerifyUrl}" target="_blank" rel="noopener" style="display:inline-block;background:#050505;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:13px 20px;border-radius:9px;margin:0 4px 8px;">Verify Certificate ↗</a>
+<!-- Certificate ID -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:15px;background:#111111;">
+<tr><td style="padding:13px 15px 12px;">
+<div style="font-size:8px;line-height:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#9d9d9d;">Certificate ID</div>
+<div style="margin-top:4px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:22px;font-weight:800;letter-spacing:.8px;color:#ffffff;word-break:break-all;">${safeNo}</div>
+<div style="margin-top:4px;font-size:9px;line-height:13px;color:#a8a8a8;">Keep this ID for future certificate verification.</div>
 </td></tr></table>
-
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;background:#ffffff;border:1px solid #e1ded7;border-radius:12px;">
-<tr><td style="padding:15px 17px;">
-<div style="font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#817b72;margin-bottom:7px;">Verification link</div>
-<a href="${safeVerifyUrl}" target="_blank" rel="noopener" style="font-size:12px;line-height:1.6;color:#111;text-decoration:underline;word-break:break-all;">${safeVerifyUrl}</a>
 </td></tr></table>
-
-<p style="margin:22px 0 0;text-align:center;color:#77736c;font-size:11px;line-height:1.6;">Keep your Certificate ID <strong style="color:#111;">${safeNo}</strong> for future verification.</p>
 </td></tr>
 
-<tr><td style="background:#050505;padding:24px 28px;color:#ffffff;">
+<!-- Actions -->
+<tr><td style="padding:24px 30px 0;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td style="padding-bottom:14px;">
-<div style="font-size:15px;font-weight:800;">Ahmed Elsheshtawy</div>
-<div style="margin-top:5px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#999;">Financial Analyst · Financial Modeling · FP&amp;A</div>
-</td></tr>
-<tr><td style="border-top:1px solid #292929;padding-top:14px;">
-<div style="font-size:10px;color:#777;margin-bottom:9px;">Connect with me</div>
-<a href="https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/" target="_blank" rel="noopener" style="color:#ffffff;text-decoration:none;font-size:11px;font-weight:700;margin-right:15px;">Portfolio</a>
-<a href="https://linkedin.com/in/ahmedelsheshtawyofficial/" target="_blank" rel="noopener" style="color:#ffffff;text-decoration:none;font-size:11px;font-weight:700;margin-right:15px;">LinkedIn</a>
-<a href="https://www.facebook.com/ahmedelsheshtawyofficial" target="_blank" rel="noopener" style="color:#ffffff;text-decoration:none;font-size:11px;font-weight:700;margin-right:15px;">Facebook</a>
-<a href="https://wa.me/+201559694529" target="_blank" rel="noopener" style="color:#ffffff;text-decoration:none;font-size:11px;font-weight:700;margin-right:15px;">WhatsApp</a>
-<a href="mailto:ahmedelsheshtawyofficial@gmail.com" style="color:#ffffff;text-decoration:none;font-size:11px;font-weight:700;">Email</a>
+<td align="center" style="padding-bottom:10px;">
+<a href="${safeVerifyUrl}" target="_blank" style="display:inline-block;background:#ff4d00;border:1px solid #ff4d00;color:#111111;text-decoration:none;font-size:13px;line-height:18px;font-weight:800;padding:13px 24px;">VIEW &amp; VERIFY CERTIFICATE&nbsp; ↗</a>
+</td></tr><tr><td align="center">
+<a href="${safeVerifyUrl}" target="_blank" style="font-size:11px;line-height:17px;font-weight:700;color:#55514a;text-decoration:underline;">Open the verification page</a>
 </td></tr></table>
-<div style="margin-top:16px;color:#666;font-size:9px;line-height:1.6;">© ${new Date().getFullYear()} Ahmed Elsheshtawy. All rights reserved.</div>
+</td></tr>
+
+<!-- Link -->
+<tr><td style="padding:20px 30px 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2dfd8;background:#ffffff;">
+<tr><td style="padding:13px 15px;">
+<div style="font-size:8px;line-height:12px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#88837b;">Official verification link</div>
+<a href="${safeVerifyUrl}" target="_blank" style="display:block;margin-top:5px;font-size:11px;line-height:17px;color:#222;text-decoration:underline;word-break:break-all;">${safeVerifyUrl}</a>
+</td></tr></table>
+</td></tr>
+
+<!-- Closing -->
+<tr><td style="padding:24px 30px 32px;">
+<p style="margin:0;text-align:center;font-size:11px;line-height:18px;color:#77736c;">Congratulations on completing your assessment.<br><strong style="color:#222;">Thank you for being part of the Ahmed Elsheshtawy platform.</strong></p>
+</td></tr>
+
+<!-- Footer -->
+<tr><td style="background:#0b0b0b;padding:24px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td>
+<div style="font-size:14px;line-height:19px;font-weight:800;color:#ffffff;">Ahmed Elsheshtawy</div>
+<div style="margin-top:4px;font-size:9px;line-height:14px;letter-spacing:1px;text-transform:uppercase;color:#8f8f8f;">Financial Analysis · Financial Modeling · FP&amp;A</div>
+</td></tr>
+<tr><td style="padding-top:17px;">
+<div style="font-size:8px;line-height:12px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#777777;margin-bottom:9px;">Explore &amp; connect</div>
+<a href="https://ahmed-portfolio.ahmedelsheshtawyofficial.workers.dev/" target="_blank" style="color:#ffffff;text-decoration:none;font-size:10px;line-height:18px;font-weight:700;margin-right:14px;">Portfolio</a>
+<a href="https://linkedin.com/in/ahmedelsheshtawyofficial/" target="_blank" style="color:#ffffff;text-decoration:none;font-size:10px;line-height:18px;font-weight:700;margin-right:14px;">LinkedIn</a>
+<a href="https://www.facebook.com/ahmedelsheshtawyofficial" target="_blank" style="color:#ffffff;text-decoration:none;font-size:10px;line-height:18px;font-weight:700;margin-right:14px;">Facebook</a>
+<a href="https://wa.me/+201559694529" target="_blank" style="color:#ffffff;text-decoration:none;font-size:10px;line-height:18px;font-weight:700;margin-right:14px;">WhatsApp</a>
+<a href="mailto:ahmedelsheshtawyofficial@gmail.com" style="color:#ffffff;text-decoration:none;font-size:10px;line-height:18px;font-weight:700;">Email</a>
+</td></tr>
+<tr><td style="padding-top:17px;border-top:1px solid #262626;margin-top:15px;">
+<div style="font-size:8px;line-height:13px;color:#666666;">© ${new Date().getFullYear()} Ahmed Elsheshtawy. All rights reserved.</div>
+</td></tr></table>
 </td></tr>
 
 </table></td></tr></table></body></html>`;
