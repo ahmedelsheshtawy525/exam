@@ -1,0 +1,4 @@
+Excam certificate email redesign v28
+
+This version applies the approved dark/orange mobile-first certificate email design.
+Only one CTA is used: View Certificate. The canonical certificate ID and /verify/{ID} URL are read from D1 immediately before sending.
