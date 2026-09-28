@@ -6,3 +6,9 @@ RETAKE / EXAM VISIBILITY FIX
 4. If the student leaves an in-progress exam, the exam remains available and is shown as "Continue Exam".
 5. The existing in-progress attempt is reused; the worker still blocks re-entry only after a passed result.
 6. Expired in-progress attempts are marked expired and a new attempt can be created.
+
+
+7. Submission robustness: answer rows are rebuilt without relying on an ON CONFLICT target, avoiding 500s on older D1 schemas missing the composite UNIQUE constraint.
+8. Result saving is recoverable and no longer closes the attempt before the result is persisted.
+9. API errors now expose the server-side details in the student UI, and the app cache-buster is v22.0.
+10. Failed attempts still create a result with passed=0, remain eligible for Retake, and never trigger certificate creation/email.

@@ -443,7 +443,7 @@ async function api(request,env,ctx){
 
     let attempt=await env.DB.prepare("SELECT * FROM exam_attempts WHERE exam_id=? AND user_id=? AND status='in_progress' ORDER BY id DESC LIMIT 1").bind(id,s.user_id).first();
     if(!attempt){
-      await env.DB.prepare("INSERT OR IGNORE INTO exam_attempts(exam_id,user_id,status) VALUES(?,?, 'in_progress')").bind(id,s.user_id).run();
+      await env.DB.prepare("INSERT INTO exam_attempts(exam_id,user_id,status) VALUES(?,?, 'in_progress') ON CONFLICT(exam_id,user_id,status) DO NOTHING").bind(id,s.user_id).run();
       attempt=await env.DB.prepare("SELECT * FROM exam_attempts WHERE exam_id=? AND user_id=? AND status='in_progress' ORDER BY id DESC LIMIT 1").bind(id,s.user_id).first();
       if(!attempt)return bad('Could not create exam attempt',500);
     }
@@ -522,6 +522,12 @@ async function api(request,env,ctx){
 
       let score=0,total=0;
 
+      // Rebuild this attempt's answer rows instead of relying on a specific
+      // UNIQUE(attempt_id,question_id) constraint. Some older D1 databases
+      // were created before that constraint was present, and SQLite/D1 then
+      // throws a 500 on ON CONFLICT(...).
+      await env.DB.prepare('DELETE FROM answers WHERE attempt_id=?').bind(id).run();
+
       for(const q of qs){
         const points=Number(q.points)||0;
         total+=points;
@@ -530,15 +536,22 @@ async function api(request,env,ctx){
         const earned=correct?points:0;
         score+=earned;
 
-        await env.DB.prepare(`INSERT INTO answers(attempt_id,question_id,selected_answer,is_correct,points_earned) VALUES(?,?,?,?,?) ON CONFLICT(attempt_id,question_id) DO UPDATE SET selected_answer=excluded.selected_answer,is_correct=excluded.is_correct,points_earned=excluded.points_earned`).bind(id,q.id,selected,correct?1:0,earned).run();
+        await env.DB.prepare(`INSERT INTO answers(attempt_id,question_id,selected_answer,is_correct,points_earned) VALUES(?,?,?,?,?)`).bind(id,q.id,selected,correct?1:0,earned).run();
       }
 
       const percentage=total>0?(score/total)*100:0;
       const passed=percentage>=Number(a.passing_percentage)?1:0;
 
-      await env.DB.prepare(`UPDATE exam_attempts SET status='submitted',submitted_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id).run();
+      // Save the result before closing the attempt. This keeps a failed
+      // submission recoverable if a later statement ever fails.
+      const existingResult=await env.DB.prepare('SELECT id FROM results WHERE attempt_id=?').bind(id).first();
+      if(existingResult){
+        await env.DB.prepare(`UPDATE results SET user_id=?,exam_id=?,score=?,total_points=?,percentage=?,passed=? WHERE attempt_id=?`).bind(s.user_id,a.exam_id,score,total,percentage,passed,id).run();
+      }else{
+        await env.DB.prepare(`INSERT INTO results(attempt_id,user_id,exam_id,score,total_points,percentage,passed) VALUES(?,?,?,?,?,?,?)`).bind(id,s.user_id,a.exam_id,score,total,percentage,passed).run();
+      }
 
-      await env.DB.prepare(`INSERT INTO results(attempt_id,user_id,exam_id,score,total_points,percentage,passed) VALUES(?,?,?,?,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET score=excluded.score,total_points=excluded.total_points,percentage=excluded.percentage,passed=excluded.passed`).bind(id,s.user_id,a.exam_id,score,total,percentage,passed).run();
+      await env.DB.prepare(`UPDATE exam_attempts SET status='submitted',submitted_at=CURRENT_TIMESTAMP WHERE id=?`).bind(id).run();
       let certificate=null;
       let certificateError=null;
       let certificateEmail=null;
@@ -553,8 +566,13 @@ async function api(request,env,ctx){
       }
       return json({ok:true,result:{score,totalPoints:total,percentage,passed,examTitle:a.title,examId:a.exam_id,passingPercentage:Number(a.passing_percentage),questionCount:qs.length,answeredCount:[...incoming.values()].filter(Boolean).length,submittedAt:new Date().toISOString(),certificate,certificateError,certificateEmail}});
     }catch(e){
-      console.error('EXAM SUBMIT ERROR:',e?.message||e);
-      return json({error:'Exam submission failed',details:String(e?.message||e)},500);
+      console.error('EXAM SUBMIT ERROR:',e?.message||e,e?.stack||'');
+      return json({
+        ok:false,
+        error:'Exam submission failed',
+        details:String(e?.message||e),
+        code:'EXAM_SUBMIT_ERROR'
+      },500);
     }
   }
 
@@ -639,19 +657,6 @@ async function api(request,env,ctx){
     const cert=await env.DB.prepare(`SELECT certificate_number,show_answers FROM certificates WHERE attempt_id=? AND user_id=? AND status='valid'`).bind(r.attempt_id,s.user_id).first();
     const certificate=cert?{certificateNumber:cert.certificate_number,showAnswers:Number(cert.show_answers)===1,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(cert.certificate_number)}`} : null;
     return json({result:r,answers:answers.results||[],certificate});
-  }
-  if(m==='GET'&&p==='/api/certificates'){
-    if(!userSession(s))return bad('Unauthorized',401);
-    const rows=await env.DB.prepare(`
-      SELECT c.id,c.certificate_number,c.status,c.issued_at,c.score,c.percentage,c.title,
-             e.title AS exam_title,r.id AS result_id
-      FROM certificates c
-      JOIN results r ON r.attempt_id=c.attempt_id AND r.user_id=c.user_id
-      JOIN exams e ON e.id=c.exam_id
-      WHERE c.user_id=?
-      ORDER BY c.issued_at DESC,c.id DESC
-    `).bind(s.user_id).all();
-    return json(rows.results||[]);
   }
   if(m==='GET'&&p==='/api/results'){
     if(!userSession(s))return bad('Unauthorized',401);
