@@ -443,7 +443,7 @@ async function api(request,env,ctx){
 
     let attempt=await env.DB.prepare("SELECT * FROM exam_attempts WHERE exam_id=? AND user_id=? AND status='in_progress' ORDER BY id DESC LIMIT 1").bind(id,s.user_id).first();
     if(!attempt){
-      await env.DB.prepare("INSERT INTO exam_attempts(exam_id,user_id,status) VALUES(?,?, 'in_progress') ON CONFLICT(exam_id,user_id,status) DO NOTHING").bind(id,s.user_id).run();
+      await env.DB.prepare("INSERT OR IGNORE INTO exam_attempts(exam_id,user_id,status) VALUES(?,?, 'in_progress')").bind(id,s.user_id).run();
       attempt=await env.DB.prepare("SELECT * FROM exam_attempts WHERE exam_id=? AND user_id=? AND status='in_progress' ORDER BY id DESC LIMIT 1").bind(id,s.user_id).first();
       if(!attempt)return bad('Could not create exam attempt',500);
     }
