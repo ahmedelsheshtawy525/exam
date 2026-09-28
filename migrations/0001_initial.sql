@@ -55,8 +55,7 @@ CREATE TABLE IF NOT EXISTS exam_attempts (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   submitted_at TEXT,
-  status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','submitted','expired')),
-  UNIQUE(exam_id,user_id,status)
+  status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','submitted','expired'))
 );
 
 CREATE TABLE IF NOT EXISTS answers (
@@ -93,6 +92,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_questions_exam ON questions(exam_id,sort_order,id);
 CREATE INDEX IF NOT EXISTS idx_attempts_user ON exam_attempts(user_id,started_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_one_in_progress_attempt ON exam_attempts(exam_id,user_id) WHERE status='in_progress';
 CREATE INDEX IF NOT EXISTS idx_results_user ON results(user_id,created_at);
 CREATE INDEX IF NOT EXISTS idx_results_exam ON results(exam_id,created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
