@@ -1,14 +1,10 @@
--- SAFE RETAKE FIX
--- Preserves all existing exam_attempts, answers and results.
--- Does NOT modify or delete certificates.
--- Rebuilds only the three tables affected by the old UNIQUE constraint:
--- exam_attempts, answers, results.
-
+-- Allow unlimited submitted/expired attempts for the same student and exam.
+-- Keep at most one active (in_progress) attempt at a time.
 PRAGMA foreign_keys=OFF;
 
-ALTER TABLE results RENAME TO results_retake_backup;
-ALTER TABLE answers RENAME TO answers_retake_backup;
-ALTER TABLE exam_attempts RENAME TO exam_attempts_retake_backup;
+ALTER TABLE exam_attempts RENAME TO exam_attempts_old;
+ALTER TABLE answers RENAME TO answers_old;
+ALTER TABLE results RENAME TO results_old;
 
 CREATE TABLE exam_attempts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -16,16 +12,12 @@ CREATE TABLE exam_attempts (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   submitted_at TEXT,
-  status TEXT NOT NULL DEFAULT 'in_progress'
-    CHECK(status IN ('in_progress','submitted','expired'))
+  status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','submitted','expired'))
 );
 
-INSERT INTO exam_attempts (
-  id, exam_id, user_id, started_at, submitted_at, status
-)
-SELECT
-  id, exam_id, user_id, started_at, submitted_at, status
-FROM exam_attempts_retake_backup;
+INSERT INTO exam_attempts (id,exam_id,user_id,started_at,submitted_at,status)
+SELECT id,exam_id,user_id,started_at,submitted_at,status
+FROM exam_attempts_old;
 
 CREATE TABLE answers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,12 +29,9 @@ CREATE TABLE answers (
   UNIQUE(attempt_id,question_id)
 );
 
-INSERT INTO answers (
-  id, attempt_id, question_id, selected_answer, is_correct, points_earned
-)
-SELECT
-  id, attempt_id, question_id, selected_answer, is_correct, points_earned
-FROM answers_retake_backup;
+INSERT INTO answers (id,attempt_id,question_id,selected_answer,is_correct,points_earned)
+SELECT id,attempt_id,question_id,selected_answer,is_correct,points_earned
+FROM answers_old;
 
 CREATE TABLE results (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,32 +45,19 @@ CREATE TABLE results (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO results (
-  id, attempt_id, user_id, exam_id, score, total_points,
-  percentage, passed, created_at
-)
-SELECT
-  id, attempt_id, user_id, exam_id, score, total_points,
-  percentage, passed, created_at
-FROM results_retake_backup;
+INSERT INTO results (id,attempt_id,user_id,exam_id,score,total_points,percentage,passed,created_at)
+SELECT id,attempt_id,user_id,exam_id,score,total_points,percentage,passed,created_at
+FROM results_old;
 
-DROP TABLE results_retake_backup;
-DROP TABLE answers_retake_backup;
-DROP TABLE exam_attempts_retake_backup;
+DROP TABLE results_old;
+DROP TABLE answers_old;
+DROP TABLE exam_attempts_old;
 
-CREATE INDEX IF NOT EXISTS idx_attempts_user
-ON exam_attempts(user_id,started_at);
-
-CREATE INDEX IF NOT EXISTS idx_results_user
-ON results(user_id,created_at);
-
-CREATE INDEX IF NOT EXISTS idx_results_exam
-ON results(exam_id,created_at);
-
--- The only uniqueness rule we need is one active attempt at a time.
--- Submitted/expired attempts may repeat indefinitely.
+CREATE INDEX IF NOT EXISTS idx_questions_exam ON questions(exam_id,sort_order,id);
+CREATE INDEX IF NOT EXISTS idx_attempts_user ON exam_attempts(user_id,started_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_in_progress_attempt
-ON exam_attempts(exam_id,user_id)
-WHERE status='in_progress';
+  ON exam_attempts(exam_id,user_id) WHERE status='in_progress';
+CREATE INDEX IF NOT EXISTS idx_results_user ON results(user_id,created_at);
+CREATE INDEX IF NOT EXISTS idx_results_exam ON results(exam_id,created_at);
 
 PRAGMA foreign_keys=ON;
