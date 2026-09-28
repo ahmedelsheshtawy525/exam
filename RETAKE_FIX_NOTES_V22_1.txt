@@ -1,0 +1,16 @@
+RETAKE FIX v22.1
+
+Root cause of the 500 on submit:
+exam_attempts had UNIQUE(exam_id,user_id,status). When a student already had a
+submitted attempt, a new attempt could start as in_progress, but submitting it
+changed its status to submitted and collided with the old submitted row.
+
+Fix:
+Migration 0012 rebuilds exam_attempts without the three-column UNIQUE constraint.
+It adds a partial unique index only for status='in_progress', so:
+- multiple submitted attempts are allowed;
+- multiple expired attempts are allowed;
+- only one in-progress attempt exists per student/exam.
+
+No certificate/email is generated for failed attempts. Certificate/email remains
+restricted to passed attempts in worker.js.
