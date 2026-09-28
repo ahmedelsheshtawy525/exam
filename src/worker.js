@@ -412,16 +412,24 @@ async function api(request,env,ctx){
   if(m==='GET'&&p==='/api/exams'){
     if(!userSession(s)&&!adminSession(s))return bad('Unauthorized',401);
     const isAdmin=adminSession(s);
+    // A failed result must NOT hide the exam. The exam is considered
+    // completed for the student only after a passed result exists.
     const examWhere=isAdmin
       ? ''
       : `WHERE e.status='active'
           AND (e.expires_at IS NULL OR e.expires_at>datetime('now'))
           AND NOT EXISTS (
             SELECT 1 FROM results r
-            WHERE r.exam_id=e.id AND r.user_id=?
+            WHERE r.exam_id=e.id AND r.user_id=? AND r.passed=1
           )`;
-    const stmt=env.DB.prepare(`SELECT e.id,e.title,e.description,e.duration_minutes,e.passing_percentage,e.status,e.created_at,e.attachments_json,e.desktop_required,e.available_from,e.expires_at,e.certificate_enabled,e.certificate_title,e.certificate_issued_by,e.certificate_type,e.certificate_level,e.certificate_format,e.certificate_duration,e.certificate_description,e.certificate_skills_json,(SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id) question_count FROM exams e ${examWhere} ORDER BY COALESCE(e.available_from,e.created_at) ASC,e.created_at DESC`);
-    const rows=isAdmin?await stmt.all():await stmt.bind(s.user_id).all();
+    const stmt=env.DB.prepare(`SELECT e.id,e.title,e.description,e.duration_minutes,e.passing_percentage,e.status,e.created_at,e.attachments_json,e.desktop_required,e.available_from,e.expires_at,e.certificate_enabled,e.certificate_title,e.certificate_issued_by,e.certificate_type,e.certificate_level,e.certificate_format,e.certificate_duration,e.certificate_description,e.certificate_skills_json,
+      (SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id) question_count,
+      ${isAdmin ? '0' : `EXISTS(
+        SELECT 1 FROM exam_attempts ea
+        WHERE ea.exam_id=e.id AND ea.user_id=? AND ea.status='in_progress'
+      )`} AS has_in_progress
+      FROM exams e ${examWhere} ORDER BY COALESCE(e.available_from,e.created_at) ASC,e.created_at DESC`);
+    const rows=isAdmin?await stmt.all():await stmt.bind(s.user_id,s.user_id).all();
     const results=(rows.results||[]).map(e=>({...e,attachments:parseAttachments(e.attachments_json)}));return json(results);
   }
   if(m==='GET'&&p.match(/^\/api\/exams\/\d+\/start$/)){
@@ -631,6 +639,19 @@ async function api(request,env,ctx){
     const cert=await env.DB.prepare(`SELECT certificate_number,show_answers FROM certificates WHERE attempt_id=? AND user_id=? AND status='valid'`).bind(r.attempt_id,s.user_id).first();
     const certificate=cert?{certificateNumber:cert.certificate_number,showAnswers:Number(cert.show_answers)===1,verificationUrl:`${new URL(request.url).origin}/verify/${encodeURIComponent(cert.certificate_number)}`} : null;
     return json({result:r,answers:answers.results||[],certificate});
+  }
+  if(m==='GET'&&p==='/api/certificates'){
+    if(!userSession(s))return bad('Unauthorized',401);
+    const rows=await env.DB.prepare(`
+      SELECT c.id,c.certificate_number,c.status,c.issued_at,c.score,c.percentage,c.title,
+             e.title AS exam_title,r.id AS result_id
+      FROM certificates c
+      JOIN results r ON r.attempt_id=c.attempt_id AND r.user_id=c.user_id
+      JOIN exams e ON e.id=c.exam_id
+      WHERE c.user_id=?
+      ORDER BY c.issued_at DESC,c.id DESC
+    `).bind(s.user_id).all();
+    return json(rows.results||[]);
   }
   if(m==='GET'&&p==='/api/results'){
     if(!userSession(s))return bad('Unauthorized',401);

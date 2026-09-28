@@ -1,0 +1,8 @@
+RETAKE / EXAM VISIBILITY FIX
+
+1. Failed results no longer hide an active exam.
+2. An exam is hidden from the student only when that student has passed it.
+3. The dashboard applies the same rule and no longer removes exams because of failed results.
+4. If the student leaves an in-progress exam, the exam remains available and is shown as "Continue Exam".
+5. The existing in-progress attempt is reused; the worker still blocks re-entry only after a passed result.
+6. Expired in-progress attempts are marked expired and a new attempt can be created.
