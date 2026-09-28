@@ -642,10 +642,9 @@ async function api(request,env,ctx){
     if(!userSession(s))return bad('Unauthorized',401);
     const rows=await env.DB.prepare(`
       SELECT c.id,c.certificate_number,c.status,c.issued_at,c.score,c.percentage,c.title,
-             e.title AS exam_title,
+             COALESCE((SELECT e.title FROM exams e WHERE e.id=c.exam_id),c.title) AS exam_title,
              (SELECT r.id FROM results r WHERE r.attempt_id=c.attempt_id AND r.user_id=c.user_id ORDER BY r.id DESC LIMIT 1) AS result_id
       FROM certificates c
-      JOIN exams e ON e.id=c.exam_id
       WHERE c.user_id=?
       ORDER BY c.issued_at DESC,c.id DESC
     `).bind(s.user_id).all();
@@ -806,7 +805,7 @@ export default {async fetch(request,env,ctx){try{
     if(!c)return new Response('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Certificate Not Found</title></head><body style="font-family:system-ui;padding:40px"><h1>Certificate Not Found</h1><p>The certificate ID is invalid or the certificate does not exist.</p></body></html>',{status:404,headers:{'content-type':'text/html;charset=UTF-8'}});
     return new Response(credentialPage(c,request),{status:200,headers:{'content-type':'text/html;charset=UTF-8','cache-control':'no-store'}});
   }
-  if(path.match(/^\/exam-review\/\d+\/?$/))return env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));
+  if(path.match(/^\/exam-review\/\d+\/?$/)){const asset=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));const h=new Headers(asset.headers);h.set('cache-control','no-store, no-cache, must-revalidate');h.set('x-exam-platform-version','23.0');return new Response(asset.body,{status:asset.status,statusText:asset.statusText,headers:h});}
   const assessmentMatch=path.match(/^\/certificate-exam\/([^/]+)\/?$/);
   if(assessmentMatch){
     const certificateNumber=decodeURIComponent(assessmentMatch[1]);
